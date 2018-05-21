@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""
+Copyright 2018 Pedro Santos <pedrosans@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import time, gc
+from bio.parameters99ff import Parameters
+from bio.pdb import Molecule
+from bio.molecular_dynamics import ForceField
+from inf.optimization import GradientDescent, Pso
+
+
+class Minimization:
+
+	def __init__(self, molecule):
+		self.molecule = molecule
+		self.iterations = 10
+		self.original_molecule = molecule.copy()
+		self.parameters = Parameters()
+		self.molecule.set_force_field_parameters(self.parameters)
+
+		self.force_field = ForceField(self.parameters)
+		molecule.get_topology().print_topology()
+
+		self.atom_index = 0
+		self.number_of_atoms = 1
+		self.number_of_atoms = len(self.molecule.atoms)
+		self.atoms = molecule.atoms
+		self.optimization = Pso(self.molecule_energy_function)
+		self.optimization = Pso(self.atom_energy_function)
+		self.optimization = GradientDescent(self.molecule_energy_function)
+		self.optimization = GradientDescent(self.atom_energy_function)
+
+	def _sort_by_energy(self):
+		energy_map = {}
+		for a in self.atoms:
+			energy_map[a.serial] = self.force_field.calculate_energy(self.molecule, a)
+		self.atoms = sorted(self.atoms, key=lambda x: energy_map[x.serial], reverse=True)
+		print(list(map(lambda x: x.serial, self.atoms)))
+
+	def atom_energy_function(self, particle):
+		a = self.atoms[self.atom_index]
+		a.translate(particle.position)
+		return self.force_field.calculate_energy(self.molecule, a)
+
+	def molecule_energy_function(self, particle):
+		a = self.atoms[self.atom_index]
+		a.translate(particle.position)
+		return self.force_field.calculate_energy(self.molecule)
+
+	def show_atom(self):
+		atom = self.atoms[self.atom_index]
+		print('Energy for atom({:d}) {}'.format(atom.serial, atom.name))
+		self.force_field.calculate_energy(self.molecule, atom)
+		self.force_field.print_energy()
+
+	def show_molecule(self):
+		self.force_field.calculate_energy(self.molecule)
+		self.force_field.print_energy()
+
+	def _print_iteration(self, i, j, atom):
+		self.force_field.calculate_energy(self.molecule)
+		rmsd = self.original_molecule.rmsd(self.molecule)
+		print('\t{:03}\t{:03}\t{:10.5f}\t{:10.7f}\t{}-{}({:03})'.format(i, j, self.force_field.energy, rmsd, atom.res_name, atom.name, atom.serial))
+
+	def run(self):
+		for i in range(self.iterations):
+			self.atom_index = 0
+			self._sort_by_energy()
+			m.shift_coordinate_origing()
+			for j in range(self.number_of_atoms):
+				self.optimization.run()
+				atom = self.atoms[self.atom_index]
+				atom.translate(self.optimization.best_particle.position)
+				self.atom_index += 1
+				self._print_iteration(i, j, atom)
+			print('Molecule energy at the end of iteration {}: '.format(i))
+			self.show_molecule()
+			m.write('/home/pedro/tmp', 'optimized-{:02}.pdb'.format(i))
+
+
+m = Molecule(pdb_file_location='data/splitted/ref01.pdb')
+# m = Molecule(pdb_file_location='/home/pedro/tmp/optimized-04.pdb')
+minimization = Minimization(m)
+print('Molecule initial energy')
+minimization.show_molecule()
+start_time = time.time()
+minimization.run()
+print("\t\t\t\t\t\t\t\t\t\t\tMinimization function executed in: %s seconds" % (time.time() - start_time))
+quit()
+print('Confere gravado:')
+m = Molecule(pdb_file_location='/home/pedro/tmp/optimized.pdb')
+minimization = Minimization(m)
+minimization.show_molecule()

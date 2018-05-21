@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""
+Copyright 2018 Pedro Santos <pedrosans@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import time, gc
+from bio.parameters99ff import Parameters
+from bio.pdb import Molecule
+from bio.molecular_dynamics import ForceField
+from inf.optimization import GradientDescent, Pso
+
+# m = Molecule(pdb_file_location='data/splitted/ref01.pdb')
+m = Molecule(pdb_file_location='/home/pedro/tmp/generated.pdb')
+parameters = Parameters()
+m.set_force_field_parameters(parameters)
+topology = m.get_topology()
+topology.print_topology()
+# topology.print_aminoacids()
+# topology.print_bonds()
+# topology.print_charges()
+# topology.print_proper_dihedrals(backbone=True, amino_acid=m.amino_acids[18])
+#topology.print_phi_psi_omega()
+topology.print_side_chain_torsions()
+# force_field = ForceField(parameters)
+# force_field.calculate_energy(m)
+# force_field.print_energy()

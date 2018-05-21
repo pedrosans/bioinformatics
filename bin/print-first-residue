@@ -1,0 +1,3 @@
+#!/bin/bash
+#command [protein.pdb] [output-file.png]
+pymol $1 -c -d 'select val, ///A/1 ; show (val) ; zoom val ; label val , name' -d "png $2, width=10cm, dpi=300, ray=1"

@@ -1,0 +1,8 @@
+#!/bin/bash
+#command [protein.pdb] [output-file.png]
+if [ -z "$2" ] ; then
+	out=$(sed 's/pdb/png/' <<< "$1")
+else
+	out=$2
+fi
+pymol $1 -c -d 'clean /' -d 'hide ; show lines ; label name' -d "png $out, width=10cm, dpi=300, ray=1"

@@ -1,0 +1,6 @@
+#!/bin/bash
+/opt/tinker/pdbxyz $1 -k amber99.key >/dev/null
+xyz=$(sed 's/pdb/xyz/' <<< "$1")
+/opt/tinker/analyze $xyz -k amber99.key e | grep 'Total Potential Energy'
+seq=$(sed 's/pdb/seq/' <<< "$1")
+rm $xyz $seq
