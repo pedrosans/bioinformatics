@@ -56,6 +56,8 @@ class Fasta:
 		self._populate_molecule()
 		self.molecule.add_sequential_ids()
 		self.molecule.update_internal_state()
+		parameters = Parameters()
+		self.molecule.set_force_field_parameters(parameters)
 		self._rotate_to_default_position()
 		return self.molecule
 
@@ -83,40 +85,43 @@ class Fasta:
 			pointer = np.array(c_terminal.point) + c_n_separator
 
 	def _rotate_to_default_position(self):
-		parameters = Parameters()
-		self.molecule.set_force_field_parameters(parameters)
 		topology = self.molecule.get_topology()
 		for i in range(len(self.molecule.amino_acids)):
 			amino_acid = self.molecule.amino_acids[i]
+			backbone_torsions_map = topology.backbone_torsions_map[amino_acid.sequence]
+
 			if not amino_acid.is_last():
 				topology.fix_nitrogen(amino_acid, self.molecule.amino_acids[i + 1])
-				topology.fix_oxygen(amino_acid, self.molecule.amino_acids[i + 1])
-			backbone_torsions_map = topology.backbone_torsions_map[amino_acid.sequence]
+				topology.fix_alpha_carbon(amino_acid, self.molecule.amino_acids[i + 1])
+
+			if 'PSI' in backbone_torsions_map:
+				topology.rotate_proper_dihedral(backbone_torsions_map['PSI'], 180.0)
+			if 'PHI' in backbone_torsions_map:
+				topology.rotate_proper_dihedral(backbone_torsions_map['PHI'], 180.0)
 			if 'OMEGA' in backbone_torsions_map:
-				omega = topology.backbone_torsions_map[amino_acid.sequence]['OMEGA']
-				target_omega = 180.0
-				topology.rotate_proper_dihedral(omega, target_omega)
-			if i > 0:
-				last_r = self.molecule.amino_acids[i - 1]
-				if 'CB' in amino_acid.atoms_map:
-					side_chain_torsion = Dihedral(last_r.atoms_map['C'], amino_acid.atoms_map['N'], amino_acid.atoms_map['CA'], amino_acid.atoms_map['CB'], None)
-					topology.rotate_proper_dihedral(side_chain_torsion, 180)
+				topology.rotate_proper_dihedral(backbone_torsions_map['OMEGA'], 180.0)
+
+			# if not amino_acid.is_first(): topology.set_side_chain_torsion(amino_acid, 0)
 
 		for i in range(len(self.molecule.amino_acids)):
 			amino_acid = self.molecule.amino_acids[i]
 
 			if not amino_acid.is_last():
+				topology.fix_oxygen(amino_acid, self.molecule.amino_acids[i + 1])
 				topology.fix_amine_hydrogen_torsion(amino_acid, self.molecule.amino_acids[i + 1])
 				topology.fix_amine_hydrogen(amino_acid, self.molecule.amino_acids[i + 1])
-				topology.fix_alpha_carbon(amino_acid, self.molecule.amino_acids[i + 1])
 			topology.fix_amine_hydrogen_angle_to_ca(amino_acid)
 
 	@staticmethod
 	def _add_n_terminal_hydrogen(residue):
-		h_atom = residue.amino_acids[0].atoms_map['H']
-		h_atom.name = 'H1'
-		h2 = h_atom.copy().translate([0, -0.8, 0])
-		h3 = h_atom.copy().translate([0, -1.6, 0])
+		n = residue.amino_acids[0].atoms_map['N']
+		h1 = residue.amino_acids[0].atoms_map['H']
+		h1.name = 'H1'
+# ATOM      9  H1  ASN A   1      -8.330   3.957   0.261  1.00  0.00           H
+# ATOM     10  H2  ASN A   1      -8.740   5.068  -0.889  1.00  0.00           H
+# ATOM     11  H3  ASN A   1      -9.877   4.041  -0.293  1.00  0.00           H
+		h2 = h1.copy().translate([-0.3, -0.5, -1.3])
+		h3 = h1.copy().translate([0, -1.1, -0.3])
 		h2.name = 'H2'
 		h3.name = 'H3'
 		residue.atoms.append(h2)
@@ -126,7 +131,7 @@ class Fasta:
 	@staticmethod
 	def _add_c_terminal_oxygen(residue):
 		o_atom = residue.amino_acids[0].atoms_map['O']
-		oxt_atom = o_atom.copy().translate([-1.7,  -1, 0.7])
+		oxt_atom = o_atom.copy().translate([-1.5,  +0.0, 1.7])
 		oxt_atom.name = 'OXT'
 		residue.atoms.append(oxt_atom)
 		residue.update_internal_state()

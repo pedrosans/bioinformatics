@@ -15,33 +15,24 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import unittest
-import bio
-from unittest.mock import patch
-from unittest.mock import MagicMock
 from bio.parameters99ff import Parameters
+from bio.topology import Topology
 from bio.pdb import Molecule
 
 
-class AmberTestCase(unittest.TestCase):
+class TopologyTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.parameters = Parameters()
-
-	def test_read_amino_acids(self):
-		self.assertEqual(len(self.parameters.amino_acids), 94)
-
-	def test_read_angle_type(self):
-		self.assertTrue(self.parameters.get_angle_type('CT', 'S', 'S') is not None)
-
-	def test_bond_atom_type(self):
-		for amino_acid in self.parameters.amino_acids.values():
-			for bond in amino_acid.bonds:
-				self.assertTrue(bond.atom_01_type is not None)
-				self.assertTrue(bond.atom_02_type is not None)
+		self.ligand = Molecule(pdb_file_location='tests/data/ligand.pdb')
+		self.topology = Topology(self.ligand, self.parameters)
 
 	def test_read_molecule(self):
-		molecule = Molecule(pdb_file_location='tests/data/1l2y-01.pdb')
-		self.assertEqual(len(molecule.amino_acids), 20)
+		self.topology.read_bonds_from_pdb_file()
+		self.topology.mount_bond_map()
+		self.topology.print_topology()
+		self.topology.print_bonds()
+		print('fim')
 
 
 if __name__ == '__main__':

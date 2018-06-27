@@ -16,6 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os, math, re
+import numpy as np
 from pyquaternion import Quaternion
 
 
@@ -24,23 +25,35 @@ class Molecule:
 	def __init__(self, pdb_file_content=None, pdb_file_location=None):
 		self.amino_acids = []
 		self.atoms = []
+		self.serial_map = {}
 		self.backbone = []
 		self.alphas = []
 		self.backbone = []
 		self.pdb_file_location = pdb_file_location
-		self.force_field_parameters = None
+		self.topology = self.force_field_parameters = None
+
 		if pdb_file_location:
 			f = open(pdb_file_location, 'r')
-			pdb_file_content = f.read()
+			self.pdb_file_content = f.read()
 			f.close()
-		self.pdb_file_content = pdb_file_content
-		if pdb_file_content:
-			for line in pdb_file_content.splitlines():
-				if 'ATOM' in line:
-					pdb_atom = Atom(line)
-					self.atoms.append(pdb_atom)
+		else:
+			self.pdb_file_content = pdb_file_content
+
+		if self.pdb_file_content:
+			self._read_atoms_from_content()
 			self.update_internal_state()
-		self.topology = None
+
+	def _read_atoms_from_content(self):
+		history = []
+		for line in self.pdb_file_content.splitlines():
+			if 'ATOM' in line or 'HETATM' in line:
+				pdb_atom = Atom(line)
+				atom_key = (pdb_atom.res_seq, pdb_atom.name)
+				if atom_key in history:
+					# duplicated, skip
+					continue
+				self.atoms.append(pdb_atom)
+				history.append(atom_key)
 
 	def set_force_field_parameters(self, ffp):
 		self.force_field_parameters = ffp
@@ -51,6 +64,10 @@ class Molecule:
 		from bio.topology import Topology
 		if not self.topology:
 			self.topology = Topology(self, self.force_field_parameters)
+			if self.amino_acids[0].is_standard():
+				self.topology.read_bonds_from_ff()
+			else:
+				self.topology.read_bonds_from_ff()
 			self.topology.mount_topology()
 		return self.topology
 
@@ -61,6 +78,7 @@ class Molecule:
 	def update_internal_state(self):
 		last_amino_acid = None
 		for a in self.atoms:
+			self.serial_map[a.serial] = a
 			if not last_amino_acid or last_amino_acid.sequence != a.res_seq:
 				last_amino_acid = AminoAcid(a.res_name, a.res_seq, self)
 				self.amino_acids.append(last_amino_acid)
@@ -69,6 +87,10 @@ class Molecule:
 				self.alphas.append(a)
 			if a.is_backbone():
 				self.backbone.append(a)
+
+	def restore_starting_point(self):
+		for a in self.atoms:
+			a.restore_starting_point()
 
 	def reset_starting_point(self):
 		for a in self.atoms:
@@ -98,6 +120,7 @@ class Molecule:
 
 	def copy(self):
 		copied = Molecule()
+		copied.force_field_parameters = self.force_field_parameters
 		for atom in self.atoms:
 			copied.atoms.append(atom.copy())
 		copied.update_internal_state()
@@ -177,6 +200,9 @@ class AminoAcid:
 		self.force_field_atoms_map = {}
 		self.amino_acid_parameters = None
 
+	def is_standard(self):
+		return 'CA' in self.atoms_map and self.atoms_map['CA'].record_type == 'ATOM'
+
 	def set_force_field_parameters(self, parameters):
 		if self.code == 'CYS' and 'HG' not in self.atoms_map:
 			self.ff_code = 'CYX'
@@ -184,10 +210,29 @@ class AminoAcid:
 		for a in self.atoms_map.values():
 			a.ff_name = a.name
 
-		self.amino_acid_parameters = parameters.get_amino_acid_parameters(self)
+		if self.is_standard():
+			self.amino_acid_parameters = parameters.get_amino_acid_parameters(self)
+			self._add_gromacs_names_to_atoms()
+
+		for atom in self.atoms_map.values():
+			self.force_field_atoms_map[atom.ff_name] = atom
+
+		if self.is_standard():
+			for atom in self.atoms_map.values():
+				if atom.ff_name in self.amino_acid_parameters.atoms_map:
+					atom.charge = self.amino_acid_parameters.atoms_map[atom.ff_name].charge
+					atom.type = self.amino_acid_parameters.atoms_map[atom.ff_name].type
+
+	def _add_gromacs_names_to_atoms(self):
+		for a in self.atoms_map.values():
+			a.ff_name = a.name
 
 		if 'SG' in self.atoms_map and 'HG' not in self.atoms_map:  # disulfid brigde detected
 			self.atoms_map['SG'].type = 'S'
+
+		if 'HA1' not in self.atoms_map and 'HA3' in self.atoms_map:
+			self.atoms_map['HA2'].ff_name = 'HA1'
+			self.atoms_map['HA3'].ff_name = 'HA2'
 
 		if 'HB1' not in self.atoms_map and 'HB3' in self.atoms_map:
 			self.atoms_map['HB2'].ff_name = 'HB1'
@@ -227,19 +272,13 @@ class AminoAcid:
 			self.atoms_map['OXT'].ff_name = 'OC2'
 			self.atoms_map['OXT'].type = 'O2'
 
-		for a in self.atoms_map.values():
-			self.force_field_atoms_map[a.ff_name] = a
-
-		for atom in self.atoms_map.values():
-			if atom.ff_name in self.amino_acid_parameters.atoms_map:
-				atom.charge = self.amino_acid_parameters.atoms_map[atom.ff_name].charge
-
 	def is_first(self):
 		return self.molecule.atoms[0].res_seq == self.sequence
 
 	def is_last(self):
 		last_index = len(self.molecule.atoms) - 1
 		return self.molecule.atoms[last_index].res_seq == self.sequence
+
 
 # TODO move to topology
 class Bond:
@@ -255,6 +294,7 @@ class Atom:
 	# https://www.wwpdb.org/documentation/file-format-content/format33/sect9.html
 	def __init__(self, pdb_atom_line=None):
 		if pdb_atom_line:
+			self.record_type = pdb_atom_line[0:6].strip()
 			# serial number
 			self.serial = int(pdb_atom_line[6:11])
 			self.original_name = pdb_atom_line[12:16].strip()
@@ -273,14 +313,19 @@ class Atom:
 			self.symbol = pdb_atom_line[76:77].strip()
 			if not self.symbol:
 				self.symbol = self.name[0:1]
-			self.point = [self.x, self.y, self.z]
+			self.point = np.array([self.x, self.y, self.z])
 			self.ff_name = None
 
 	def move(self, position):
-		self.x = position[0]
-		self.y = position[1]
-		self.z = position[2]
-		self.point = [self.x, self.y, self.z]
+		self.point[0] = self.x = position[0]
+		self.point[1] = self.y = position[1]
+		self.point[2] = self.z = position[2]
+
+	def restore_starting_point(self):
+		self.point[0] = self.x = self.original_x
+		self.point[1] = self.y = self.original_y
+		self.point[2] = self.z = self.original_z
+		return self
 
 	def reset_starting_point(self):
 		self.original_x = self.x
@@ -289,17 +334,15 @@ class Atom:
 		return self
 
 	def translate_starting_point(self, position):
-		self.x = self.original_x + position[0]
-		self.y = self.original_y + position[1]
-		self.z = self.original_z + position[2]
-		self.point = [self.x, self.y, self.z]
+		self.point[0] = self.x = self.original_x + position[0]
+		self.point[1] = self.y = self.original_y + position[1]
+		self.point[2] = self.z = self.original_z + position[2]
 		return self
 
 	def translate(self, position):
-		self.x = self.x + position[0]
-		self.y = self.y + position[1]
-		self.z = self.z + position[2]
-		self.point = [self.x, self.y, self.z]
+		self.point[0] = self.x = self.x + position[0]
+		self.point[1] = self.y = self.y + position[1]
+		self.point[2] = self.z = self.z + position[2]
 		# TODO: reset_starting_point ?
 		return self
 
@@ -312,7 +355,7 @@ class Atom:
 		self.x = rotated[0]
 		self.y = rotated[1]
 		self.z = rotated[2]
-		self.point = [self.x, self.y, self.z]
+		self.point = np.array([self.x, self.y, self.z])
 
 	def is_in(self, *args):
 		return self in args
@@ -338,6 +381,7 @@ class Atom:
 
 	def copy(self):
 		copied = Atom()
+		copied.record_type = self.record_type
 		copied.serial = self.serial
 		copied.name = self.name
 		copied.ff_name = self.ff_name
@@ -350,6 +394,6 @@ class Atom:
 		copied.y = copied.original_y = self.y
 		copied.z = copied.original_z = self.z
 		copied.symbol = self.symbol
-		copied.point = (self.x, self.y, self.z)
+		copied.point = np.copy(self.point)
 		return copied
 

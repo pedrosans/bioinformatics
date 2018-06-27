@@ -22,26 +22,14 @@ from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
 
 
-class AmberTestCase(unittest.TestCase):
+class PdbTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.parameters = Parameters()
-
-	def test_read_amino_acids(self):
-		self.assertEqual(len(self.parameters.amino_acids), 94)
-
-	def test_read_angle_type(self):
-		self.assertTrue(self.parameters.get_angle_type('CT', 'S', 'S') is not None)
-
-	def test_bond_atom_type(self):
-		for amino_acid in self.parameters.amino_acids.values():
-			for bond in amino_acid.bonds:
-				self.assertTrue(bond.atom_01_type is not None)
-				self.assertTrue(bond.atom_02_type is not None)
+		self.ligand = Molecule(pdb_file_location='tests/data/ligand.pdb')
 
 	def test_read_molecule(self):
-		molecule = Molecule(pdb_file_location='tests/data/1l2y-01.pdb')
-		self.assertEqual(len(molecule.amino_acids), 20)
+		self.assertEqual(len(self.ligand.atoms), 31)
 
 
 if __name__ == '__main__':

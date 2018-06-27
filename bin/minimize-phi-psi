@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""
+Copyright 2018 Pedro Santos <pedrosans@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import time, gc
+from bio.parameters99ff import Parameters
+from bio.pdb import Molecule
+from bio.molecular_dynamics import ForceField
+from inf.optimization import GradientDescent, Pso
+
+
+class PhiPsiMinimization:
+
+	DIHEDRAL_TYPES = ['PHI', 'PSI']
+
+	def __init__(self, molecule):
+		self.molecule = molecule
+		self.parameters = Parameters()
+		self.molecule.set_force_field_parameters(self.parameters)
+		self.force_field = ForceField(self.parameters)
+		self.topology = self.molecule.get_topology()
+		self.phi = self.psi = None
+
+		self.iterations = 5
+		self.length = len(self.molecule.amino_acids)
+
+		self.amino_acid_index = 0
+		self.dihedral_type = None
+		self.amino_acid = self.molecule.amino_acids[self.amino_acid_index]
+
+		self.computations = 0
+		self.optimization = GradientDescent(self.molecule_energy, debug=False)
+		self.optimization.dimensions_number = 1
+		self.optimization.precision = 0.01
+		self.optimization.small_step = 0.0015
+		self.optimization.smallest_step = self.optimization.small_step / 2
+
+	def molecule_energy(self, particle):
+		self.computations += 1
+		self.apply_particle(particle)
+		return self.force_field.calculate_energy(self.molecule, test_phi_psi_torsions_only=False)
+
+	def apply_particle(self, particle):
+		self.molecule.restore_starting_point()
+		molecule = self.molecule
+		t = molecule.get_topology()
+		torsions_map = t.backbone_torsions_map[self.amino_acid.sequence]
+		original_values = self.phi if self.dihedral_type == 'PHI' else self.psi
+		original_value = original_values[self.amino_acid_index]
+		if self.dihedral_type in torsions_map:
+			t.rotate_proper_dihedral(torsions_map[self.dihedral_type], original_value + particle.dimensions[0])
+
+	def run_per_angle(self):
+		for i in range(self.iterations):
+			self.phi = self.topology.get_phi_angles()
+			self.psi = self.topology.get_psi_angles()
+			for self.amino_acid_index in range(self.length):
+				self.amino_acid = self.molecule.amino_acids[self.amino_acid_index]
+				for dihedral_type in PhiPsiMinimization.DIHEDRAL_TYPES:
+					self.dihedral_type = dihedral_type
+					if self.dihedral_type not in self.topology.backbone_torsions_map[self.amino_acid.sequence]:
+						continue
+					self.optimization.run()
+					self.apply_particle(self.optimization.best_particle)
+					self.molecule.reset_starting_point()
+					self._print_iteration(i, self.amino_acid_index)
+				self.amino_acid_index += 1
+			print('Molecule energy at the end of iteration {}: '.format(i))
+			self.show_molecule()
+			m.write('/home/pedro/tmp', 'optimized-{:02}.pdb'.format(i))
+
+	def show_angle(self):
+		atom = self.atoms[self.atom_index]
+		print('Energy for atom({:d}) {}'.format(atom.serial, atom.name))
+		self.force_field.calculate_energy(self.molecule, atom)
+		self.force_field.print_energy()
+
+	def show_molecule(self):
+		self.force_field.calculate_energy(self.molecule)
+		self.force_field.print_energy()
+
+	def _print_iteration(self, i, j):
+		self.force_field.calculate_energy(self.molecule)
+		a = self.amino_acid
+		print('\t{:03}\t{}\t{:03}\t{:10.5f}\t{:10.7f}\t{}({:03})'
+			  .format(i, self.dihedral_type, j, self.force_field.energy, -1, a.code, a.sequence))
+
+
+# m = Molecule(pdb_file_location='/home/pedro/tmp/ref01.pdb')
+# m = Molecule(pdb_file_location='/home/pedro/tmp/predicao-01/best-2.pdb')
+# m = Molecule(pdb_file_location='/home/pedro/tmp/predicao-01/optimized-01.pdb')
+m = Molecule(pdb_file_location='/home/pedro/tmp/generated.pdb')
+m = Molecule(pdb_file_location='/home/pedro/tmp/pred-01/best-3.pdb')
+
+minimization = PhiPsiMinimization(m)
+print('Molecule initial energy')
+minimization.show_molecule()
+start_time = time.time()
+minimization.run_per_angle()
+print("\t\t\t\t\t\t\t\t\t\t\tMinimization function executed in: %s seconds" % (time.time() - start_time))

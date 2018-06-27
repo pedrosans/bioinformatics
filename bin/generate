@@ -16,14 +16,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from bio.pdb import Molecule
 from bio.fasta import Fasta
+
+omegas = [None, 176.376, 180.000, 174.874, 175.561, 171.494, 177.437, 180.000, 174.268, 180.000, 180.000, 177.437, 176.376, 176.376, 175.561, 172.748, 180.000, 177.437, 176.376, 171.494]
 
 input = 'NLYIQWLKDGGPSSGRPPPS'
 fasta_sequence = Fasta(input)
 m = fasta_sequence.to_pdb()
-
 topology = m.get_topology()
+topology.set_side_chain_torsion(m.amino_acids[2], 80)
+# topology.rotate_backbone('OMEGA', omegas)
 #topology.print_o_c_n_h_dihedral()
 topology.print_phi_psi_omega()
 topology.print_C_N_CA_CB()

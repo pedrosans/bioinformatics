@@ -23,42 +23,26 @@ from bio.molecular_dynamics import ForceField
 from inf.optimization import GradientDescent, Pso
 
 
-class Minimization:
+class Docking:
 
-	def __init__(self, molecule):
-		self.molecule = molecule
-		self.original_molecule = molecule.copy()
+	def __init__(self, complex=None, ligand=None, receptor=None):
+		self.complex = complex
+		self.ligand = ligand
+		self.receptor = receptor
 		self.parameters = Parameters()
-		self.molecule.set_force_field_parameters(self.parameters)
+		self.complex.set_force_field_parameters(self.parameters)
+		self.ligand.set_force_field_parameters(self.parameters)
+		self.receptor.set_force_field_parameters(self.parameters)
 
 		self.force_field = ForceField(self.parameters)
-		molecule.get_topology().print_topology()
+		self.force_field.calculate_energy(self.receptor)
+		self.force_field.print_energy()
+		self.force_field.calculate_energy(self.ligand)
+		self.force_field.print_energy()
 
-		self.atom_index = None
+		self.iterations = 1
 
-		self.iterations = 10
-		self.number_of_atoms = len(self.molecule.atoms)
-
-		self.iterations = 50
-		self.number_of_atoms = 16
-
-		self.atoms = molecule.atoms
 		self.optimization = Pso(self.molecule_energy_function)
-		self.optimization = Pso(self.atom_energy_function)
-		self.optimization = GradientDescent(self.molecule_energy_function)
-		self.optimization = GradientDescent(self.atom_energy_function)
-
-	def _sort_by_energy(self):
-		energy_map = {}
-		for a in self.atoms:
-			energy_map[a.serial] = self.force_field.calculate_energy(self.molecule, a)
-		self.atoms = sorted(self.atoms, key=lambda x: energy_map[x.serial], reverse=True)
-		print(list(map(lambda x: x.serial, self.atoms)))
-
-	def atom_energy_function(self, particle):
-		a = self.atoms[self.atom_index]
-		a.translate_starting_point(particle.dimensions)
-		return self.force_field.calculate_energy(self.molecule, atom=a, protect_bonds=False)
 
 	def molecule_energy_function(self, particle):
 		a = self.atoms[self.atom_index]
@@ -96,17 +80,11 @@ class Minimization:
 			m.write('/home/pedro/tmp', 'optimized-{:02}.pdb'.format(i))
 
 
-# m = Molecule(pdb_file_location='/home/pedro/tmp/ref01.pdb')
-m = Molecule(pdb_file_location='/home/pedro/tmp/generated.pdb')
+m_cristal = Molecule(pdb_file_location='/home/pedro/tmp/docking/cristal.pdb')
+m_ligante = Molecule(pdb_file_location='/home/pedro/tmp/docking/ligante.pdb')
+m_receptor = Molecule(pdb_file_location='/home/pedro/tmp/docking/receptor.pdb')
 
-minimization = Minimization(m)
-print('Molecule initial energy')
-minimization.show_molecule()
+docking = Docking(complex=m_cristal, ligand=m_ligante, receptor=m_receptor)
 start_time = time.time()
-minimization.run_per_atom()
-print("\t\t\t\t\t\t\t\t\t\t\tMinimization function executed in: %s seconds" % (time.time() - start_time))
-quit()
-print('Confere gravado:')
-m = Molecule(pdb_file_location='/home/pedro/tmp/minimized.pdb')
-minimization = Minimization(m)
-minimization.show_molecule()
+# docking.run()
+print("\t\t\t\t\t\t\t\t\t\t\tDocking function executed in: %s seconds" % (time.time() - start_time))

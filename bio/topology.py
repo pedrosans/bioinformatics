@@ -33,10 +33,13 @@ class Topology:
 		self.angles = []
 		self.improper_dihedrals = []
 		self.proper_dihedrals = []
+		self.phi_psi_torsions = []
 		self.dihedral_map = {}
 		# rotations around N - Cα(called Phi, φ) and Cα - C(called Psi, ψ)
 		self.backbone_torsions_map = {}
-		self.side_chain_torsions_map = {}
+		self.followers_cache = {}
+		self.eletrostatic_map = []
+		self.solid_side_chain_eletrostatic_map = []
 
 	def _print_missing_types(self):
 		for a in self.molecule.atoms:
@@ -44,6 +47,12 @@ class Topology:
 				print('Atom type not found: {} {} {}'.format(a.name, a.res_name, a.res_seq))
 
 	def get_following_atoms(self, atom, excluding_list):
+		key = tuple([atom.serial] + list(map(lambda a: a.serial, excluding_list)))
+		if key not in self.followers_cache:
+			self.followers_cache[key] = self._get_following_atoms(atom, excluding_list)
+		return self.followers_cache[key]
+
+	def _get_following_atoms(self, atom, excluding_list):
 		result = []
 		bonds = []
 		for bonded in self.bonds_map[atom.serial]:
@@ -114,6 +123,7 @@ class Topology:
 				dihedral = self.backbone_torsions_map[amino_acid.sequence][dihedral_type]
 				self.rotate_proper_dihedral(dihedral, angles[i])
 
+	# CT  C   O            1   120.400    669.440 ;
 	def fix_oxygen(self, r1, r2):
 		a1 = r2.atoms_map['N']
 		a2 = r1.atoms_map['C']
@@ -125,6 +135,12 @@ class Topology:
 		a3 = r1.atoms_map['O']
 		self.change_angle(a1, a2, a3, 120.4, impacted_atoms=[a3])
 
+		if r2.is_last():
+			a1 = r2.atoms_map['CA']
+			a2 = r2.atoms_map['C']
+			a3 = r2.atoms_map['OXT']
+			self.change_angle(a1, a2, a3, 120.4, impacted_atoms=[a3])
+
 	# CT  C   N            1   116.600    585.760 ; AA general
 	def fix_nitrogen(self, r1, r2):
 		a1 = r1.atoms_map['CA']
@@ -132,6 +148,7 @@ class Topology:
 		a3 = r2.atoms_map['N']
 		self.change_angle(a1, a2, a3, 116.6)
 
+	# C   N   CT           1   121.900    418.400 ; AA general
 	def fix_alpha_carbon(self, r1, r2):
 		a1 = r1.atoms_map['C']
 		a2 = r2.atoms_map['N']
@@ -146,13 +163,20 @@ class Topology:
 		a3 = r2.atoms_map['H']
 		self.change_angle(a1, a2, a3, 120, impacted_atoms=[a3])
 
+	# CT  N   H            1   118.040    418.400 ; new99 general,     changed based on NMA nmodes
 	def fix_amine_hydrogen_angle_to_ca(self, r1):
-		if 'H' not in r1.atoms_map:
+		if 'H' not in r1.atoms_map and 'H1' not in r1.atoms_map:
 			return
 		a1 = r1.atoms_map['CA']
 		a2 = r1.atoms_map['N']
-		a3 = r1.atoms_map['H']
-		self.change_angle(a1, a2, a3, 118.04, impacted_atoms=[a3])
+		if r1.is_first():
+			h2 = r1.atoms_map['H2']
+			h3 = r1.atoms_map['H3']
+			self.change_angle(a1, a2, h2, 118.04, impacted_atoms=[h2])
+			self.change_angle(a1, a2, h3, 118.04, impacted_atoms=[h3])
+		else:
+			a3 = r1.atoms_map['H']
+			self.change_angle(a1, a2, a3, 118.04, impacted_atoms=[a3])
 
 	def fix_amine_hydrogen_torsion(self, r1, r2):
 		if 'H' not in r2.atoms_map:
@@ -164,13 +188,43 @@ class Topology:
 		d = Dihedral(a1, a2, a3, a4, None)
 		self.rotate_proper_dihedral(d, 180, impacted_atoms=[a4])
 
-	def mount_topology(self):
+	def set_side_chain_torsion(self, residue, angle):
+		i = self.molecule.amino_acids.index(residue)
+		last_r = self.molecule.amino_acids[i - 1]
+		if 'CB' in residue.atoms_map:
+			a1 = last_r.atoms_map['C']
+			a2 = residue.atoms_map['N']
+			a3 = residue.atoms_map['CA']
+			a4 = residue.atoms_map['CB']
+			side_chain_torsion = Dihedral(last_r.atoms_map['C'], residue.atoms_map['N'], residue.atoms_map['CA'], residue.atoms_map['CB'], None)
+			impacted = []
+			impacted += self.get_following_atoms(a4, [a3])
+			self.rotate_proper_dihedral(side_chain_torsion, angle, impacted_atoms=impacted)
+
+	def read_bonds_from_pdb_file(self):
+		already_mapped = []
+		ser_map = self.molecule.serial_map
+		for line in self.molecule.pdb_file_content.splitlines():
+			if line.startswith('CONECT'):
+				values = line.split()
+				serial_01 = int(values[1])
+				for i in range(2, len(values)):
+					serial_02 = int(values[i])
+					if serial_01 in ser_map and serial_02 in ser_map:
+						key_01 = (serial_01, serial_02)
+						key_02 = (serial_02, serial_01)
+						if key_01 not in already_mapped and key_02 not in already_mapped:
+							self.bonds.append(Bond(ser_map[serial_01], ser_map[serial_02], None))
+							already_mapped.append(key_01)
+							already_mapped.append(key_02)
+
+	def read_bonds_from_ff(self):
 		#mount bonds list
 		unbond_sulfides = []
 		bond_sulfides = []
 		for i in range(len(self.molecule.amino_acids)):
 			amino_acid = self.molecule.amino_acids[i]
-			amino_acid_bonds = self.mount_aminoacid_bonds(amino_acid)
+			amino_acid_bonds = self.mount_amino_acid_bonds(amino_acid)
 			if not amino_acid.is_last():
 				next = self.molecule.amino_acids[i + 1]
 				amino_acid_bonds += [Bond(amino_acid.atoms_map['C'], next.atoms_map['N'], self.parameters.get_bond_type('C', 'N'))]
@@ -188,6 +242,7 @@ class Topology:
 
 		self._print_missing_types()
 
+	def mount_bond_map(self):
 		#mount bonds map
 		for a in self.molecule.atoms:
 			self.bonds_map[a.serial] = []
@@ -198,6 +253,8 @@ class Topology:
 			self.interacting[bond.atom_01.serial][bond.atom_02.serial] = True
 			self.interacting[bond.atom_02.serial][bond.atom_01.serial] = True
 
+	def mount_topology(self):
+		self.mount_bond_map()
 		#mount angles list
 		for atom in self.molecule.atoms:
 			for i in range(len(self.bonds_map[atom.serial])):
@@ -242,25 +299,18 @@ class Topology:
 		for d in self.proper_dihedrals:
 			if d.atom_03.res_seq not in self.backbone_torsions_map:
 				self.backbone_torsions_map[d.atom_03.res_seq] = {}
-				self.side_chain_torsions_map[d.atom_03.res_seq] = []
-
-			if (	d.atom_01.is_forming_important_dihedral()
-				and d.atom_02.is_forming_important_dihedral()
-				and d.atom_03.is_forming_important_dihedral()
-				and d.atom_04.is_forming_important_dihedral()):
-				if d.atom_02.name == 'N' and d.atom_03.name == 'CA':
-					self.backbone_torsions_map[d.atom_03.res_seq]['PHI'] = d
-				elif d.atom_02.name == 'CA' and d.atom_03.name == 'C':
-					self.backbone_torsions_map[d.atom_03.res_seq]['PSI'] = d
-				elif d.atom_02.name == 'C' and d.atom_03.name == 'N':
-					self.backbone_torsions_map[d.atom_03.res_seq]['OMEGA'] = d
-
-			if (	d.atom_01.is_forming_side_chain_dihedral()
-					and d.atom_02.is_forming_side_chain_dihedral()
-					and d.atom_03.is_forming_side_chain_dihedral()
-					and d.atom_04.is_forming_side_chain_dihedral()):
-				self.side_chain_torsions_map[d.atom_03.res_seq].append(d)
-
+			a1 = d.atom_01.name
+			a2 = d.atom_02.name
+			a3 = d.atom_03.name
+			a4 = d.atom_04.name
+			if a1 == 'C' and a2 == 'N' and a3 == 'CA' and a4 == 'C':
+				self.backbone_torsions_map[d.atom_03.res_seq]['PHI'] = d
+				self.phi_psi_torsions.append(d)
+			elif a1 == 'N' and a2 == 'CA' and a3 == 'C' and a4 == 'N':
+				self.backbone_torsions_map[d.atom_03.res_seq]['PSI'] = d
+				self.phi_psi_torsions.append(d)
+			elif a1 == 'CA' and a2 == 'C' and a3 == 'N' and a4 == 'CA':
+				self.backbone_torsions_map[d.atom_03.res_seq]['OMEGA'] = d
 
 		#mount improper dihedrals list
 		for atom_03 in self.molecule.atoms:
@@ -275,32 +325,26 @@ class Topology:
 				if improper_dihedral_types:
 					self.improper_dihedrals.append(Dihedral(atom_01, atom_02, atom_03, atom_04, improper_dihedral_types))
 
-		self.eletrostatic_map = []
 		for i in range(len(self.molecule.atoms)):
 			for j in range(i + 1, len(self.molecule.atoms)):
 				if self.molecule.atoms[j].serial in self.interacting[self.molecule.atoms[i].serial]:
 					continue  # skip atoms with covalent bond
 				self.eletrostatic_map.append((self.molecule.atoms[i], self.molecule.atoms[j]))
+				if self.molecule.atoms[i].res_seq != self.molecule.atoms[j].res_seq:
+					self.solid_side_chain_eletrostatic_map.append((self.molecule.atoms[i], self.molecule.atoms[j]))
 
-	def mount_aminoacid_bonds(self, amino_acid):
+	def mount_amino_acid_bonds(self, amino_acid):
 		result = []
-		for mapped_bond in amino_acid.amino_acid_parameters.bonds:
-			atom_01_code = mapped_bond.atom_01_code
-			atom_02_code = mapped_bond.atom_02_code
-			atom_01_type = mapped_bond.atom_01_type
-			atom_02_type = mapped_bond.atom_02_type
-			if atom_01_code == 'C' and atom_02_code == 'N':
+		atoms_map = amino_acid.force_field_atoms_map
+		for ff_res_bond in amino_acid.amino_acid_parameters.bonds:
+			if ff_res_bond.atom_01_code == 'C' and ff_res_bond.atom_02_code == 'N':
 				# pepitidic bond is mapped in another place
 				continue
-			if atom_01_code in amino_acid.force_field_atoms_map and atom_02_code in amino_acid.force_field_atoms_map:
-				bond_type = self.parameters.get_bond_type(atom_01_type, atom_02_type)
-				if not bond_type:
-					print(' cant find boundtype for: '+atom_01_type + ' ' + atom_02_type)
-				atom_01 = amino_acid.force_field_atoms_map[atom_01_code]
-				atom_02 = amino_acid.force_field_atoms_map[atom_02_code]
-				atom_01.type = atom_01_type
-				atom_02.type = atom_02_type
-				result.append(Bond(atom_01, atom_02, bond_type))
+			if ff_res_bond.atom_01_code in atoms_map and ff_res_bond.atom_02_code in atoms_map:
+				ff_bond = self.parameters.get_bond_type(ff_res_bond.atom_01_type, ff_res_bond.atom_02_type)
+				if not ff_bond:
+					print(' cant find boundtype for: '+ ff_res_bond.atom_01_type + ' ' + ff_res_bond.atom_02_type)
+				result.append(Bond(atoms_map[ff_res_bond.atom_01_code], atoms_map[ff_res_bond.atom_02_code], ff_bond))
 		return result
 
 	def print_topology(self):
@@ -328,6 +372,10 @@ class Topology:
 			print('{}({}) {}'.format(amino_acid.code, amino_acid.sequence, len(amino_acid.atoms_map.values()) ))
 
 	def print_bonds(self):
+		for b in self.bonds:
+			print('{}({}) {}({})'.format(b.atom_01.name, b.atom_01.serial, b.atom_02.name, b.atom_02.serial))
+
+	def print_bonds_per_residue(self):
 		count_map = {}
 		for amino_acid in self.molecule.amino_acids:
 			count_map[amino_acid.sequence] = 0
@@ -343,6 +391,20 @@ class Topology:
 	def print_charges(self):
 		for a in self.molecule.atoms:
 			print('{} {:7.3f}'.format(a.serial, a.charge))
+
+	def get_phi_angles(self):
+		angles = []
+		for amino_acid in self.molecule.amino_acids:
+			map = self.backbone_torsions_map[amino_acid.sequence]
+			angles.append(360 if 'PHI' not in map else map['PHI'].get_torsion_angle())
+		return angles
+
+	def get_psi_angles(self):
+		angles = []
+		for amino_acid in self.molecule.amino_acids:
+			map = self.backbone_torsions_map[amino_acid.sequence]
+			angles.append(360 if 'PSI' not in map else map['PSI'].get_torsion_angle())
+		return angles
 
 	def print_phi_psi_omega(self):
 		for amino_acid in self.molecule.amino_acids:
@@ -379,20 +441,8 @@ class Topology:
 			r2 = None if i + 1 >= len(residues) else residues[i + 1]
 			if r2 and 'CB' in r2.atoms_map:
 				d = Dihedral(r1.atoms_map['C'], r2.atoms_map['N'], r2.atoms_map['CA'], r2.atoms_map['CB'], None)
-				print('{}({:2}) C N CA CB  {:8.3f}'.format(r1.code, r1.sequence, d.get_torsion_angle()))
+				print('{}({:2}) C N CA CB  {:8.3f}'.format(r2.code, r2.sequence, d.get_torsion_angle()))
 
-
-	def print_side_chain_torsions(self):
-		for amino_acid in self.molecule.amino_acids:
-			if amino_acid.sequence not in self.side_chain_torsions_map:
-				continue
-			line = amino_acid.code + ' — '
-			dihedrals = self.side_chain_torsions_map[amino_acid.sequence]
-			for i in range(len(dihedrals)):
-				line += '{:8.3f}'.format(dihedrals[i].get_torsion_angle())
-				if i + 1 < len(dihedrals):
-					line += ' — '
-			print(line)
 
 	def print_proper_dihedrals(self, amino_acid=None, backbone=None):
 		counter = 0

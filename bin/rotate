@@ -18,9 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
-import numpy as np
-from numpy import cross, eye, dot
-from scipy.linalg import expm, norm
 
 # ASN 	         	 -56.151
 # LEU 	  -43.946	 -51.318	 176.376

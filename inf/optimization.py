@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Copyright 2018 Pedro Santos <pedrosans@gmail.com>
 
@@ -14,11 +15,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-#!/usr/bin/env python3
 
 import math, random, sys
-from bio.pdb import Molecule
-from inf import particle
 from inf.particle import Particle
 from inf.particle import Velocity
 try:
@@ -27,68 +25,64 @@ try:
 except ImportError:
 	ui_imported = False
 
-ITERATIONS = 40
-
 
 class GradientDescent:
 
 	small_value = 0.000000000001
 
-	def __init__(self, fitness_function):
+	def __init__(self, fitness_function, debug=False):
+		self.debug = debug
 		self.fitness_function = fitness_function
-		self.best_particle = None
-		self.best_fitness = None
-		self.gradient = None
-		self.precision = None
+		self.iterations = 10
+		self.dimensions_number = 3
 		self.precision = 0.01
-		self.small_step = 0.00015
+		self.current_step = self.small_step = 0.15
+		self.smallest_step = self.small_step / 4
+		self.best_particle = self.best_fitness = self.gradient = None
 
 	def _clean(self):
-		self.small_step = 0.00015
-		self.best_particle = Particle()
+		self.current_step = self.small_step
+		self.best_particle = Particle(dimensions_number=self.dimensions_number)
 		self.best_fitness = self.fitness_function(self.best_particle)
-		self.gradient = self.calculate_gradient(self.best_particle)
+		self.gradient = self.calculate_gradient()
 
 	def run(self):
 		self._clean()
-		# print('{:03}\t{:10.7f}'.format(-1, self.fitness))
-		for j in range(ITERATIONS):
-			# print('gradient: {:6.2f} {:6.2f} {:6.2f}'.format(gradient[0], gradient[1], gradient[2]))
+		# print('{:03}\t{:10.7f}'.format(-1, self.best_fitness))
+		for j in range(self.iterations):
+			# print('gradient: {:6.2f} {:6.2f} {:6.2f}'.format(self.gradient[0], self.gradient[1], self.gradient[2]))
 			direction = -1
-			displacement = [
-				self.gradient[0] * self.small_step * direction,
-				self.gradient[1] * self.small_step * direction,
-				self.gradient[2] * self.small_step * direction
-			]
+			displacement = []
+			for i in range(self.dimensions_number):
+				displacement.append(self.gradient[i] * self.current_step * direction)
+
 			point = self.best_particle.copy().translate(displacement)
 			current_fitness = self.fitness_function(point)
 			delta_fitness = self.best_fitness - current_fitness
 			if current_fitness < self.best_fitness:
 				self.best_fitness = current_fitness
 				self.best_particle = point
-				self.gradient = self.calculate_gradient(self.best_particle)
-			# print('{:03}\t{:10.7f}'.format(j, self.fitness))
-			if delta_fitness < 0:
+				self.gradient = self.calculate_gradient()
+			if self.debug:
+				print('{:03}\t{:10.7f}\tDelta: {:10.7f}\tStep: {:10.7f}\tSample disp: {:10.7f}'.format(j, self.best_fitness, delta_fitness, self.current_step, displacement[0]))
+			if delta_fitness < 0 and self.current_step > self.smallest_step:
 				# going in the wrong direction, possible overshoot
-				self.small_step = self.small_step / 2
+				self.current_step = self.current_step / 2
 				continue
 			if self.precision and delta_fitness < self.precision:
 				break
 
-	def calculate_gradient(self, p):
-		# TODO make a constant
-		delta_x = p.copy().translate([GradientDescent.small_value, 0, 0])
-		delta_y = p.copy().translate([0, GradientDescent.small_value, 0])
-		delta_z = p.copy().translate([0, 0, GradientDescent.small_value])
-		particle_fitness = self.fitness_function(p)
-		x_fitness = self.fitness_function(delta_x) - particle_fitness
-		y_fitness = self.fitness_function(delta_y) - particle_fitness
-		z_fitness = self.fitness_function(delta_z) - particle_fitness
-		return [
-				x_fitness / GradientDescent.small_value,
-				y_fitness / GradientDescent.small_value,
-				z_fitness / GradientDescent.small_value
-			]
+	def calculate_gradient(self):
+		deltas = []
+		for i in range(self.dimensions_number):
+			direction = [0] * self.dimensions_number
+			direction[i] = GradientDescent.small_value
+			deltas.append(self.best_particle.copy().translate(direction))
+		gradient = []
+		for i in range(self.dimensions_number):
+			partial_slope = (self.fitness_function(deltas[i]) - self.best_fitness) / GradientDescent.small_value
+			gradient.append(partial_slope)
+		return gradient
 
 	def print_result(self):
 		print('Fitness: {} '.format(self.best_fitness))
@@ -101,14 +95,16 @@ if PLOT and ui_imported:
 
 class Pso:
 
-	def __init__(self, fitness_function):
+	def __init__(self, fitness_function, dimensions_number=3):
 		self.fitness_function = fitness_function
+		self.dimensions_number = dimensions_number
 		self.lower_bound = self.upper_bound = None
 		self.personal_best_retention = 0.7
 		self.global_best_retention = 0.3
 		self.inertia = 0.8
 		self.iterations = 40
 		self.number_of_particles = 15
+		self.best_particle = self.g_best_fitness = None
 
 	def set_bounds(self, lower_bound, upper_bound):
 		self.lower_bound = lower_bound
@@ -126,22 +122,20 @@ class Pso:
 	def _clean(self):
 		self.p_best_fitness = [None] * self.number_of_particles
 		self.p_best_particle = [None] * self.number_of_particles
-		self.best_particle = Particle()
-		self.g_best_fitness = self.fitness_function(self.best_particle)
-		self.particles = Particle.create_particles(self.number_of_particles)
-		self.velocities = Velocity.create_velocities(self.number_of_particles)
-		# print(self.g_best_fitness)
+		self.best_particle = self.g_best_fitness = None
+		self.particles = Particle.create_particles(self.number_of_particles, self.lower_bound, self.upper_bound, dimensions_number=self.dimensions_number)
+		self.velocities = Velocity.create_velocities(self.number_of_particles, dimensions_number=self.dimensions_number)
 
-	def calculate_new_velocity(self, current, personal_best, global_best):
-		for i in range(len(current)):
-			current[i] = (current[i] * self.inertia
-					+ self.keep(personal_best[i], self.personal_best_retention)
-					+ self.keep(global_best[i], self.global_best_retention))
+	def calculate_new_velocity(self, v, personal_best_delta, global_best_delta):
+		for j in range(self.dimensions_number):
+			v.dimensions[j] = (v.dimensions[j] * self.inertia
+						+ self.keep(personal_best_delta[j], self.personal_best_retention)
+						+ self.keep(global_best_delta[j], self.global_best_retention))
 
 	def run(self):
 		self._clean()
 		for j in range(self.iterations):
-			#Assess fitness
+			# Assess fitness
 			iteration_best = None
 			fitness_sum = 0
 			for i in range(self.number_of_particles):
@@ -156,22 +150,22 @@ class Pso:
 					self.g_best_fitness = fitness
 					self.best_particle = self.p_best_particle[i].copy()
 			m = fitness_sum / self.number_of_particles
-			print('{}\t{}'.format(self.g_best_fitness, m))
+			print('{:15.3f}\t{:25.3f}\t'.format(self.g_best_fitness, m), end='')
+			print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[:int(self.dimensions_number/2)]])
+			# print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[int(self.dimensions_number/2):]])
 
-			#Determine how to mutate
+			# Determine how to mutate
 			for i in range(self.number_of_particles):
 				v = self.velocities[i]
 				p = self.particles[i]
 
-				l_best_pos_delta = p.position_delta(self.p_best_particle[i])
-				g_best_pos_delta = p.position_delta(self.best_particle)
-				self.calculate_new_velocity(v.shift, l_best_pos_delta, g_best_pos_delta)
+				l_best_pos_delta = p.delta(self.p_best_particle[i])
+				# if i == 0: print(["{0:7.2f}".format(i) for i in l_best_pos_delta])
+				g_best_pos_delta = p.delta(self.best_particle)
+				self.calculate_new_velocity(v, l_best_pos_delta, g_best_pos_delta)
+			# print(["{0:7.2f}".format(i) for i in self.velocities[0].dimensions])
 
-				l_best_rotation_delta = p.rotation_delta(self.p_best_particle[i])
-				g_best_rotation_delta = p.rotation_delta(self.best_particle)
-				self.calculate_new_velocity(v.rotation, l_best_rotation_delta, g_best_rotation_delta)
-
-			#Mutate particles
+			# Mutate particles
 			for i in range(self.number_of_particles):
 				self.particles[i].move(self.velocities[i])
 				if self.upper_bound:

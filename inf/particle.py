@@ -20,94 +20,64 @@ import random, math
 class Particle:
 	sequence = 1
 
-	def __init__(self):
+	def __init__(self, dimensions_number=3):
+		self.dimensions_number = dimensions_number
+		self.dimensions = [0] * dimensions_number
 		self.id = Particle.sequence
 		Particle.sequence += 1
-		self.position = [0, 0, 0]
-		self.direction = [0, 0, 0]
 
 	def move(self, velocity):
-		self.position[0] = self.position[0] + velocity.shift[0]
-		self.position[1] = self.position[1] + velocity.shift[1]
-		self.position[2] = self.position[2] + velocity.shift[2]
-		self.direction[0] = self.direction[0] + velocity.rotation[0]
-		self.direction[1] = self.direction[1] + velocity.rotation[1]
-		self.direction[2] = self.direction[2] + velocity.rotation[2]
+		for i in range(self.dimensions_number):
+			self.dimensions[i] = self.dimensions[i] + velocity.dimensions[i]
 
 	def translate(self, delta):
-		self.position[0] = self.position[0] + delta[0]
-		self.position[1] = self.position[1] + delta[1]
-		self.position[2] = self.position[2] + delta[2]
+		for i in range(self.dimensions_number):
+			self.dimensions[i] = self.dimensions[i] + delta[i]
 		return self
 
 	def truncate(self, lbound, ubound):
-		self.position[0] = max(self.position[0] , lbound)
-		self.position[0] = min(self.position[0] , ubound)
-		self.position[1] = max(self.position[1] , lbound)
-		self.position[1] = min(self.position[1] , ubound)
-		self.position[2] = max(self.position[2] , lbound)
-		self.position[2] = min(self.position[2] , ubound)
+		for i in range(self.dimensions_number):
+			self.dimensions[i] = max(self.dimensions[i], lbound)
+			self.dimensions[i] = min(self.dimensions[i], ubound)
 
 	def copy(self):
-		copied = Particle()
-		copied.position = list(self.position)
-		copied.direction = list(self.direction)
+		copied = Particle(dimensions_number=self.dimensions_number)
+		copied.dimensions = list(self.dimensions)
 		return copied
 
-	def position_delta(self, reference_particle):
-		delta_x = reference_particle.position[0] - self.position[0]
-		delta_y = reference_particle.position[1] - self.position[1]
-		delta_z = reference_particle.position[2] - self.position[2]
-		return [delta_x, delta_y, delta_z]
-
-	def rotation_delta(self, reference_particle):
-		delta_x = reference_particle.direction[0] - self.direction[0]
-		delta_y = reference_particle.direction[1] - self.direction[1]
-		delta_z = reference_particle.direction[2] - self.direction[2]
-		return [delta_x, delta_y, delta_z]
-
-	def to_string(self):
-		cp = self.position
-		#cd = self.direction
-		#return '{:+10.5f} {:+10.5f} {:+10.5f} | {:+10.5f} {:+10.5f} {:+10.5f}'.format(cp[0], cp[1], cp[2], cd[0], cd[1], cd[2])
-		return '{:+10.5f} {:+10.5f} {:+10.5f}'.format(cp[0], cp[1], cp[2])
+	def delta(self, reference_particle):
+		delta = [None] * self.dimensions_number
+		for i in range(self.dimensions_number):
+			delta[i] = reference_particle.dimensions[i] - self.dimensions[i]
+		return delta
 
 	@staticmethod
-	def create_particles(number):
+	def create_particles(number, lbound, ubound, dimensions_number=3):
 		particles = []
 		for i in range(number):
-			particles.append(Particle().move_to_random_place())
+			particles.append(Particle(dimensions_number=dimensions_number).move_to_random_place(lbound, ubound))
 		return particles
 
-	def move_to_random_place(self):
-		self.position = [random_position(), random_position(), random_position()]
-		self.direction = [random.random(), random.random(), random.random()]
+	def move_to_random_place(self, lbound, ubound):
+		for i in range(self.dimensions_number):
+			self.dimensions[i] = random.randrange(lbound, ubound)
 		return self
 
 
 class Velocity:
 
-	def __init__(self):
-		self.shift = []
-		self.rotation = []
+	def __init__(self, dimensions_number=3):
+		self.dimensions_number = dimensions_number
+		self.dimensions = [None] * dimensions_number
 
 	def set_random_speed(self):
-		self.shift = [random_velocity(), random_velocity(), random_velocity()]
-		self.rotation = [random_rotation(), random_rotation(), random_rotation()]
+		for i in range(self.dimensions_number):
+			self.dimensions[i] = random.random() * 2 - 1
 		return self
 
 	@staticmethod
-	def create_velocities(number):
+	def create_velocities(number, dimensions_number=3):
 		velocities = []
 		for i in range(number):
-			velocities.append(Velocity().set_random_speed())
+			velocities.append(Velocity(dimensions_number=dimensions_number).set_random_speed())
 		return velocities
-
-def random_position():
-	return random.random() * 20 - 0
-
-def random_velocity():
-	return random.random() * 1
-
-def random_rotation():
-	return random.random() / 1

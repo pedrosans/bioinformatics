@@ -36,6 +36,8 @@ class ForceField():
 
 	def __init__(self, parameters):
 		self.parameters = parameters
+		self.molecule = self.topology = None
+		self.energy = self.bonds_e = self.angles_e = self.proper_dihedrals_e = self.improper_dihedrals_e = self.vdw_e = None
 		self._clean_energy_values()
 
 	def _clean_energy_values(self):
@@ -47,23 +49,18 @@ class ForceField():
 		self.vdw_e = 0
 		self.eletrostatic_e = 0
 
-	def calculate_energy(self, molecule, atom=None, protect_bonds=False):
-		self._clean_energy_values()
-		self.molecule = molecule
-		self.topology = molecule.get_topology()
+	def _calculate_bond_energy(self, atom):
 		# calculate bond energy
 		for i in range(len(self.topology.bonds)):
 			bond = self.topology.bonds[i]
 			if atom and atom not in bond.atoms:
 				continue
 			k = bond.bond_type.bond_sprint_constant
-			r = bond.atom_01.distance_of(bond.atom_02) / 10 #converting from Angstrom to nm
+			r = bond.atom_01.distance_of(bond.atom_02) / 10   # converting from Angstrom to nm
 			r_eq = bond.bond_type.equilibrium_bond_length
 			self.bonds_e += k * math.pow(r - r_eq, 2)
 
-		if protect_bonds:
-			self.bonds_e = math.pow(self.bonds_e, 2)
-
+	def _calculate_angle_energy(self, atom, warn_high_energy):
 		# calculate angle energy
 		for i in range(len(self.topology.angles)):
 			angle = self.topology.angles[i]
@@ -72,7 +69,21 @@ class ForceField():
 			k = angle.angle_type.angle_sprint_constant
 			a = angle.get_angle()
 			a_eq = angle.angle_type.equilibrium_bond_angle
-			self.angles_e += k * math.pow(math.radians(a - a_eq), 2)
+			angle_e = k * math.pow(math.radians(a - a_eq), 2)
+			if warn_high_energy and angle_e > 100:
+				print('warn: angle {} {}({}-{}) {}'.format(angle.atom_01.name, angle.atom_02.name, angle.atom_02.res_name, angle.atom_02.res_seq, angle.atom_03.name))
+			self.angles_e += angle_e
+
+	def calculate_energy(self, molecule, atom=None, protect_bonds=False, test_phi_psi_torsions_only=False, warn_high_energy=False):
+		self._clean_energy_values()
+		self.molecule = molecule
+		self.topology = molecule.get_topology()
+
+		self._calculate_bond_energy(atom)
+		if protect_bonds:
+			self.bonds_e = math.pow(self.bonds_e, 2)
+
+		self._calculate_angle_energy(atom, warn_high_energy)
 
 		# calculate proper dihedral energy
 		# ;i  j   k  l	 func      phase      kd      pn
@@ -81,6 +92,8 @@ class ForceField():
 		# http://www.wolframalpha.com/input/?i=3.34720%2F2+*+(+1+%2B+cos(+x+*+1+-+0+pi))+%2B+3.55640%2F2+*+(+1+%2B+cos(+x+*+2+-+1+pi))
 		for dihedral in self.topology.proper_dihedrals:
 			if atom and atom not in dihedral.atoms:
+				continue
+			if test_phi_psi_torsions_only and dihedral not in self.topology.phi_psi_torsions:
 				continue
 			for dihedral_type in dihedral.dihedral_types:
 				Vn = dihedral_type.rotation_barrier_height
@@ -92,6 +105,8 @@ class ForceField():
 		# calculate improper dihedral energy
 		for dihedral in self.topology.improper_dihedrals:
 			if atom and atom not in dihedral.atoms:
+				continue
+			if test_phi_psi_torsions_only:
 				continue
 			for dihedral_type in dihedral.dihedral_types:
 				Vn = dihedral_type.rotation_barrier_height
@@ -107,15 +122,16 @@ class ForceField():
 					continue
 				if atom.serial in self.topology.interacting[other.serial]:
 					continue
-				self._calculate_non_bonded(atom, other)
+				self._calculate_non_bonded(atom, other, warn_high_energy)
 		else:
 			for interaction in self.topology.eletrostatic_map:
-				self._calculate_non_bonded(interaction[0], interaction[1])
+			# for interaction in self.topology.solid_side_chain_eletrostatic_map:
+				self._calculate_non_bonded(interaction[0], interaction[1], warn_high_energy)
 
 		self.energy = self.bonds_e + self.angles_e + self.proper_dihedrals_e + self.improper_dihedrals_e + self.vdw_e + self.eletrostatic_e
 		return self.energy
 
-	def _calculate_non_bonded(self, atom_01, atom_02):
+	def _calculate_non_bonded(self, atom_01, atom_02, warn_high_energy):
 		# electrostatic
 		distance = atom_01.distance_of(atom_02)
 		distance = distance / 10  # converting from Angstrom to nm
@@ -126,7 +142,10 @@ class ForceField():
 		atom_02_type = self.parameters.atom_types[atom_02.type]
 		radio_ratio = ((atom_01_type.sigma + atom_02_type.sigma) / 2) / distance
 		epsilon_ij = math.sqrt(atom_01_type.epsilon * atom_02_type.epsilon)
-		self.vdw_e += epsilon_ij * (radio_ratio ** 12 - 2.0 * (radio_ratio ** 6))
+		bond_vdw = epsilon_ij * (radio_ratio ** 12 - 2.0 * (radio_ratio ** 6))
+		if warn_high_energy and bond_vdw > 8000:
+			print('warn: vdw {}({}) {}({}) energy: {}'.format(atom_01.name, atom_01.serial, atom_01.res_name, atom_01.res_seq, bond_vdw))
+		self.vdw_e += bond_vdw
 
 	def print_energy(self):
 		print('  bond              :\t{0:.6f}'.format(self.bonds_e))

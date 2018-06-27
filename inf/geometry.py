@@ -15,18 +15,37 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import numpy
+import numpy as np
 import math
-
 from numpy import cross, eye, dot
 from scipy.linalg import expm, norm
 
+POINT_IDENTITY_MATRIX = eye(3)
+
+
+def _rotation_matrix(axis, theta):
+	return np.array(expm(cross(POINT_IDENTITY_MATRIX, axis / numpy.linalg.norm(axis) * theta)))
+
 
 def rotation_matrix(axis, theta):
-	return expm(cross(eye(3), axis/norm(axis)*theta))
+	"""
+	Return the rotation matrix associated with counterclockwise rotation about
+	the given axis by theta radians.
+	Using the Euler-Rodrigues formula:
+	from: https://stackoverflow.com/questions/6802577/rotation-of-3d-vector
+	"""
+	axis = np.asarray(axis)
+	axis = axis/math.sqrt(np.dot(axis, axis))
+	a = math.cos(theta/2.0)
+	b, c, d = -axis*math.sin(theta/2.0)
+	aa, bb, cc, dd = a*a, b*b, c*c, d*d
+	bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
+	return np.array([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
+					 [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
+					 [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
 
 
 def calculate_torsion(point_i, point_j, point_k, point_l):
-
 	plane_i_parallel = to_unity_vector(point_j, point_i)
 	plane_ij_parallel = to_unity_vector(point_j, point_k)
 	plane_j_parallel = to_unity_vector(point_k, point_l)

@@ -26,52 +26,76 @@ from inf.optimization import GradientDescent, Pso
 class Prediction:
 
 	def __init__(self, molecule):
+		self.computations = 0
 		self.molecule = molecule
+		self.length = len(molecule.amino_acids)
 		self.original_molecule = molecule.copy()
 		self.parameters = Parameters()
+		self.force_field = ForceField(self.parameters)
 		self.molecule.set_force_field_parameters(self.parameters)
+		self.topology = self.molecule.get_topology()
+		self.phi = self.topology.get_phi_angles()
+		self.psi = self.topology.get_psi_angles()
 
-		self.optimization = Pso(self.molecule_rmsd)
-		#self.optimization.set_bounds(-15, 15)
-		self.optimization.set_view_bounds(5, 10)
-		self.optimization.number_of_particles = 15
-		self.optimization.iterations = 60
-		self.optimization.personal_best_retention = 0.7
-		self.optimization.global_best_retention = 0.2
-		self.optimization.inertia = 0.8
+		self.pso = Pso(self.molecule_energy)
+		self.pso.set_bounds(-180, 180)
+		self.pso.dimensions_number = self.length * 2
+		self.pso.number_of_particles = 80
+		self.pso.iterations = 30
+		self.pso.personal_best_retention = 0.003
+		self.pso.global_best_retention = 0.03
+		self.pso.inertia = 1
 
-		self.lower = 10000000
-		self.step = 1
+		self.gd = GradientDescent(self.molecule_energy, debug=True)
+		self.gd.dimensions_number = self.length * 2
+		self.gd.precision = 0.01
+		self.gd.small_step = 0.0015
+		self.gd.smallest_step = self.gd.small_step / 32
+		self.gd.iterations = 20
 
+	def molecule_energy(self, particle):
+		self.computations += 1
+		self.apply_particle(particle)
+		return self.force_field.calculate_energy(self.molecule, test_phi_psi_torsions_only=True)
+		# return self.force_field.calculate_energy(self.molecule, test_phi_psi_torsions_only=False)
 
-	def molecule_rmsd(self, particle):
-		self.molecule.rotate_starting_angle(particle.direction)
-		self.molecule.translate(particle.position)
-		rmsd = TC5B.rmsd(self.molecule, comparison='ALPHAS')
-		if rmsd < self.lower:
-			self.lower = rmsd
-			self.molecule.write_all('/home/pedro/tmp/debug/', '{:02}-particle_{:02}.pdb'.format(self.step, particle.id))
-			self.step += 1
-		return rmsd
+	def apply_particle(self, particle):
+		self.molecule.restore_starting_point()
+		phi_angles = particle.dimensions[:self.length]
+		psi_angles = particle.dimensions[self.length:]
+		for i in range(self.length):
+			phi_angles[i] = self.phi[i] - phi_angles[i]
+			psi_angles[i] = self.psi[i] - psi_angles[i]
+		topology = self.molecule.get_topology()
+		topology.rotate_backbone('PHI', phi_angles)
+		topology.rotate_backbone('PSI', psi_angles)
 
 	def run(self):
-		rmsd = TC5B.rmsd(self.molecule)
-		rmsd_a = TC5B.rmsd(self.molecule, comparison='ALPHAS')
-		print('Starting RMSD: {:8.4} {:8.4}'.format(rmsd, rmsd_a))
-		self.optimization.run()
-		particle = self.optimization.best_particle
-		self.molecule.rotate_starting_angle(particle.direction)
-		self.molecule.translate(particle.position)
-		rmsd = TC5B.rmsd(self.molecule)
-		rmsd_a = TC5B.rmsd(self.molecule, comparison='ALPHAS')
-		print('Final RMSD: {:8.4} {:8.4}'.format(rmsd, rmsd_a))
-		m.write('/home/pedro/tmp', 'aligned.pdb')
+		optimization = self.pso
+		optimization.run()
+		self.apply_particle(optimization.best_particle)
+		self.force_field.calculate_energy(self.molecule)
+		self.force_field.print_energy()
+		import sys
+		if len(sys.argv) > 1:
+			m.write('/home/pedro/tmp', 'best-' + sys.argv[1] + '.pdb')
+		else:
+			m.write('/home/pedro/tmp', 'best.pdb')
 
 
+# from bio.fasta import Fasta
+# omegas = [None, 176.376, 180.000, 174.874, 175.561, 171.494, 177.437, 180.000, 174.268, 180.000, 180.000, 177.437, 176.376, 176.376, 175.561, 172.748, 180.000, 177.437, 176.376, 171.494]
+# input = 'NLYIQWLKDGGPSSGRPPPS'
+# fasta_sequence = Fasta(input)
+# m = fasta_sequence.to_pdb()
+
+# m = Molecule(pdb_file_location='/home/pedro/tmp/predicao-01/best-2.pdb')
+m = Molecule(pdb_file_location='/home/pedro/tmp/generated.pdb')
 TC5B = Molecule(pdb_file_location='/home/pedro/tmp/1l2y-01.pdb')
-m = Molecule(pdb_file_location='/home/pedro/tmp/rotated.pdb')
+
 minimization = Prediction(m)
 start_time = time.time()
 minimization.run()
+print('computations: {}'.format(minimization.computations))
 print("\tExecuted in: %s seconds" % (time.time() - start_time))
 
