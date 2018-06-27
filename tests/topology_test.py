@@ -24,14 +24,23 @@ class TopologyTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.parameters = Parameters()
+		self.protein = Molecule(pdb_file_location='tests/data/ref01.pdb')
+		self.protein.set_force_field_parameters(self.parameters)
 		self.ligand = Molecule(pdb_file_location='tests/data/ligand.pdb')
-		self.topology = Topology(self.ligand, self.parameters)
 
-	def test_read_molecule(self):
-		self.topology.read_bonds_from_pdb_file()
-		self.topology.mount_topology(read_atom_types_from_bonds=True)
-		self.topology.print_topology()
-		self.assertEquals(len(self.topology.bonds), 33)
+	def test_read_standard_residue(self):
+		topology = Topology(self.protein, self.parameters)
+		topology.read_bonds_from_ff()
+		topology.mount_topology(read_atom_types_from_bonds=False)
+		topology.print_topology()
+		self.assertEquals(len(topology.bonds), 415)
+
+	def test_read_non_standard_residue(self):
+		topology = Topology(self.ligand, self.parameters)
+		topology.read_bonds_from_pdb_file()
+		topology.mount_topology(read_atom_types_from_bonds=True)
+		topology.print_topology()
+		self.assertEquals(len(topology.bonds), 33)
 
 
 if __name__ == '__main__':

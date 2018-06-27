@@ -26,11 +26,19 @@ class EnergyTestCase(unittest.TestCase):
 		self.parameters = Parameters()
 		self.ligand = Molecule(pdb_file_location='tests/data/ligand.pdb')
 		self.ligand.set_force_field_parameters(self.parameters)
+		self.protein = Molecule(pdb_file_location='tests/data/ref01.pdb')
+		self.protein.set_force_field_parameters(self.parameters)
 		self.force_field = ForceField(self.parameters)
 
-	def test_calculate_non_standard_res_energy(self):
+	def test_non_standard_res_energy(self):
 		self.force_field.calculate_energy(self.ligand, test_electrostatic_only=True)
 		self.force_field.print_energy()
+		self.assertEquals(self.force_field.energy, 553.28142232581)
+
+	def test_standard_res_energy(self):
+		self.force_field.calculate_energy(self.protein, test_electrostatic_only=False)
+		self.force_field.print_energy()
+		self.assertEquals(self.force_field.energy, 606.3322671759454)
 
 
 if __name__ == '__main__':

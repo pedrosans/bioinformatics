@@ -333,6 +333,9 @@ class Topology:
 				if improper_dihedral_types:
 					self.improper_dihedrals.append(Dihedral(atom_01, atom_02, atom_03, atom_04, improper_dihedral_types))
 
+		self.mount_electrostatic_map()
+
+	def mount_electrostatic_map(self, participant=None):
 		for i in range(len(self.molecule.atoms)):
 			for j in range(i + 1, len(self.molecule.atoms)):
 				if self.molecule.atoms[j].serial in self.interacting[self.molecule.atoms[i].serial]:
@@ -340,6 +343,9 @@ class Topology:
 				self.eletrostatic_map.append((self.molecule.atoms[i], self.molecule.atoms[j]))
 				if self.molecule.atoms[i].res_seq != self.molecule.atoms[j].res_seq:
 					self.solid_side_chain_eletrostatic_map.append((self.molecule.atoms[i], self.molecule.atoms[j]))
+			if participant:
+				for p_atom in participant:
+					self.eletrostatic_map.append((self.molecule.atoms[i], p_atom))
 
 	def mount_amino_acid_bonds(self, amino_acid):
 		result = []

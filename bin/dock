@@ -37,7 +37,7 @@ class Docking:
 		self.force_field = ForceField(self.parameters)
 		self.force_field.calculate_energy(self.receptor)
 		self.force_field.print_energy()
-		self.force_field.calculate_energy(self.ligand)
+		self.force_field.calculate_energy(self.ligand, test_electrostatic_only=True)
 		self.force_field.print_energy()
 
 		self.iterations = 1
