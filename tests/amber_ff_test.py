@@ -22,32 +22,26 @@ from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
 
 
-class BioTestCase(unittest.TestCase):
+class AmberTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.parameters = Parameters()
-		#self.controller = MagicMock()
-		#self.bang_command = MagicMock()
-		#Command.get_matching_command = MagicMock()
 
-	#self.assertEqual(self.status_line.vim_command, 'buffers')
-	#self.assertTrue()
-
-	def test_read_aminoacids(self):
-		self.assertEqual(len(self.parameters.amino_acids), 82)
+	def test_read_amino_acids(self):
+		self.assertEqual(len(self.parameters.amino_acids), 94)
 
 	def test_read_angle_type(self):
-		self.assertTrue(self.parameters.get_angle_type('CT', 'S', 'S') != None)
+		self.assertTrue(self.parameters.get_angle_type('CT', 'S', 'S') is not None)
 
 	def test_bond_atom_type(self):
 		for amino_acid in self.parameters.amino_acids.values():
 			for bond in amino_acid.bonds:
-				self.assertTrue(bond.atom_01_type != None)
-				self.assertTrue(bond.atom_02_type != None)
+				self.assertTrue(bond.atom_01_type is not None)
+				self.assertTrue(bond.atom_02_type is not None)
 
 	def test_read_molecule(self):
-		molecule = Molecule(pdb_file_location='data/splitted/ref01.pdb')
-		self.assertEqual(len(molecule.amino_acids), 13)
+		molecule = Molecule(pdb_file_location='tests/1l2y-01.pdb')
+		self.assertEqual(len(molecule.amino_acids), 20)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""
+Copyright 2018 Pedro Santos <pedrosans@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+from bio.parameters99ff import Parameters
+from bio.pdb import Molecule
+import numpy as np
+from numpy import cross, eye, dot
+from scipy.linalg import expm, norm
+
+# ASN 	         	 -56.151
+# LEU 	  -43.946	 -51.318	 176.376
+# TYR 	  -66.484	 -30.907	 180.000
+# ILE 	  -65.229	 -45.973	 174.874
+# GLN 	  -64.723	 -30.345	 175.561
+# TRP 	  -73.142	 -43.448	 171.494
+# LEU 	  -64.913	 -43.281	 177.437
+# LYS 	  -59.536	 -25.710	-180.000
+# ASP 	  -77.995	  -8.885	 174.268
+# GLY 	  110.793	   8.110	-180.000
+# GLY 	   55.250	-124.402	 180.000
+# PRO 	  -57.995	 -28.717	 177.437
+# SER 	  -81.836	  19.091	-176.376
+# SER 	 -124.056	  13.344	-176.376
+# GLY 	   67.914	  25.177	 175.561
+# ARG 	 -143.998	 131.300	-172.748
+# PRO 	  -70.123	 160.052	-180.000
+# PRO 	  -69.513	 145.690	 177.437
+# PRO 	  -77.291	 124.194	 176.376
+# SER 	  -78.112	        	 171.494
+
+input_phi_psi = [
+	['ASN', 360.00, -56.14],
+	['LEU', -43.98, -51.31],
+	['TYR', -66.47, -30.90],
+	['ILE', -65.22, -45.94],
+	['GLN', -64.75, -30.35],
+	['TRP', -73.14, -43.42],
+	['LEU', -64.88, -43.25],
+	['LYS', -59.51, -25.70],
+	['ASP', -77.99, -8.82],
+	['GLY', 110.78, 8.08],
+	# ['GLY', -55.24, 124.37],
+	# ['PRO', 57.98, 28.77],
+	['GLY', 55.24, -124.37],
+	['PRO', -57.98, -28.77],
+	['SER', -81.83, 19.13],
+	['SER', -124.06, 13.40],
+	['GLY', 67.93, 25.22],
+	['ARG', -143.95, 131.30],
+	['PRO', -70.10, 160.07],
+	['PRO', -69.48, 145.67],
+	['PRO', -77.26, 124.22],
+	['SER', -78.10, 360.00]
+]
+
+
+m = Molecule(pdb_file_location='/home/pedro/tmp/generated.pdb')
+parameters = Parameters()
+m.set_force_field_parameters(parameters)
+topology = m.get_topology()
+
+phi = []
+psi = []
+for i in range(len(input_phi_psi)):
+	phi.append(input_phi_psi[i][1])
+	psi.append(input_phi_psi[i][2])
+topology.rotate_backbone('PHI', phi)
+topology.rotate_backbone('PSI', psi)
+
+m.topology = None
+topology = m.get_topology()
+topology.print_o_c_n_h_dihedral()
+topology.print_phi_psi_omega()
+# topology.print_side_chain_torsions()
+topology.print_joint_angles()
+m.write_all('/home/pedro/tmp', 'rotated.pdb')

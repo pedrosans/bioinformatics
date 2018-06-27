@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""
+Copyright 2018 Pedro Santos <pedrosans@gmail.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import time, gc
+from bio.parameters99ff import Parameters
+from bio.pdb import Molecule
+from bio.molecular_dynamics import ForceField
+from inf.optimization import GradientDescent, Pso
+
+
+class Prediction:
+
+	def __init__(self, molecule):
+		self.molecule = molecule
+		self.original_molecule = molecule.copy()
+		self.parameters = Parameters()
+		self.molecule.set_force_field_parameters(self.parameters)
+
+		self.optimization = Pso(self.molecule_rmsd)
+		#self.optimization.set_bounds(-15, 15)
+		self.optimization.set_view_bounds(5, 10)
+		self.optimization.number_of_particles = 15
+		self.optimization.iterations = 60
+		self.optimization.personal_best_retention = 0.7
+		self.optimization.global_best_retention = 0.2
+		self.optimization.inertia = 0.8
+
+		self.lower = 10000000
+		self.step = 1
+
+
+	def molecule_rmsd(self, particle):
+		self.molecule.rotate_starting_angle(particle.direction)
+		self.molecule.translate(particle.position)
+		rmsd = TC5B.rmsd(self.molecule, comparison='ALPHAS')
+		if rmsd < self.lower:
+			self.lower = rmsd
+			self.molecule.write_all('/home/pedro/tmp/debug/', '{:02}-particle_{:02}.pdb'.format(self.step, particle.id))
+			self.step += 1
+		return rmsd
+
+	def run(self):
+		rmsd = TC5B.rmsd(self.molecule)
+		rmsd_a = TC5B.rmsd(self.molecule, comparison='ALPHAS')
+		print('Starting RMSD: {:8.4} {:8.4}'.format(rmsd, rmsd_a))
+		self.optimization.run()
+		particle = self.optimization.best_particle
+		self.molecule.rotate_starting_angle(particle.direction)
+		self.molecule.translate(particle.position)
+		rmsd = TC5B.rmsd(self.molecule)
+		rmsd_a = TC5B.rmsd(self.molecule, comparison='ALPHAS')
+		print('Final RMSD: {:8.4} {:8.4}'.format(rmsd, rmsd_a))
+		m.write('/home/pedro/tmp', 'aligned.pdb')
+
+
+TC5B = Molecule(pdb_file_location='/home/pedro/tmp/1l2y-01.pdb')
+m = Molecule(pdb_file_location='/home/pedro/tmp/rotated.pdb')
+minimization = Prediction(m)
+start_time = time.time()
+minimization.run()
+print("\tExecuted in: %s seconds" % (time.time() - start_time))
+

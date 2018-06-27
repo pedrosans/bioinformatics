@@ -17,6 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy
 import math
 
+from numpy import cross, eye, dot
+from scipy.linalg import expm, norm
+
+
+def rotation_matrix(axis, theta):
+	return expm(cross(eye(3), axis/norm(axis)*theta))
+
 
 def calculate_torsion(point_i, point_j, point_k, point_l):
 
@@ -27,6 +34,8 @@ def calculate_torsion(point_i, point_j, point_k, point_l):
 	plane_i_orthogonal = calculate_cross_product(plane_i_parallel, plane_ij_parallel)
 	plane_j_orthogonal = -calculate_cross_product(plane_ij_parallel, plane_j_parallel)
 	planes_angle_cos = numpy.dot(plane_i_orthogonal, plane_j_orthogonal)
+	# TODO make sure the cos is between -1 and 1
+	planes_angle_cos = round(planes_angle_cos, 3)
 	sign = 1.0 if numpy.dot(plane_i_orthogonal, plane_j_parallel) <= 0.0 else -1.0
 	return numpy.degrees(sign * math.acos(planes_angle_cos))
 

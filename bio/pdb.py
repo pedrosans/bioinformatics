@@ -16,8 +16,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os, math, re
-import inf.geometry
-import numpy as np
+from pyquaternion import Quaternion
 
 
 class Molecule:
@@ -40,7 +39,7 @@ class Molecule:
 				if 'ATOM' in line:
 					pdb_atom = Atom(line)
 					self.atoms.append(pdb_atom)
-			self._populate_subsets()
+			self.update_internal_state()
 		self.topology = None
 
 	def set_force_field_parameters(self, ffp):
@@ -55,7 +54,11 @@ class Molecule:
 			self.topology.mount_topology()
 		return self.topology
 
-	def _populate_subsets(self):
+	def add_sequential_ids(self):
+		for i in range(len(self.atoms)):
+			self.atoms[i].serial = i + 1
+
+	def update_internal_state(self):
 		last_amino_acid = None
 		for a in self.atoms:
 			if not last_amino_acid or last_amino_acid.sequence != a.res_seq:
@@ -67,20 +70,37 @@ class Molecule:
 			if a.is_backbone():
 				self.backbone.append(a)
 
-	def shift_coordinate_origing(self):
+	def reset_starting_point(self):
 		for a in self.atoms:
-			a.shift_coordinate_origing()
+			a.reset_starting_point()
 
-	def dislocate(self, shift):
+	def move_origin(self, point):
+		import numpy
+		delta = numpy.array(self.atoms[0].point) - numpy.array(point)
+		for a in self.atoms:
+			a.translate(-delta)
+			a.reset_starting_point()
+
+	def translate(self, shift):
 		for atom in self.atoms:
 			atom.translate(shift)
+		return self
+
+	def translate_starting_point(self, shift):
+		for atom in self.atoms:
+			atom.translate_starting_point(shift)
+		return self
+
+	def rotate_starting_angle(self, angles):
+		for atom in self.atoms:
+			atom.rotate_starting_angle(angles)
 		return self
 
 	def copy(self):
 		copied = Molecule()
 		for atom in self.atoms:
 			copied.atoms.append(atom.copy())
-		copied._populate_subsets()
+		copied.update_internal_state()
 		return copied
 
 	def rmsd(self, m2, comparison=None):
@@ -94,19 +114,23 @@ class Molecule:
 			m1_atoms = self.atoms
 			m2_atoms = m2.atoms
 
-		delta_sum = 0
+		sum = 0
 		for i in range(len(m1_atoms)):
 			distance = m1_atoms[i].distance_of(m2_atoms[i])
-			delta_sum += math.pow(distance, 2)
-		return math.sqrt(delta_sum / len(self.atoms))
+			sum += math.pow(distance, 2)
+		return math.sqrt(sum / len(m1_atoms))
 
 	def write_all(self, directory, file_name=None, format=None):
 		f = self._open_file(directory, file_name)
 		i = 0
 		for a in self.atoms:
 			i += 1
+			atom_name = a.name
+			if len(atom_name) <= 3:
+				# prepend space to keep compatibility to Tinker pdbtoxyz command
+				atom_name = ' ' + atom_name
 			line = 'ATOM  {:5} {:4} {:3} A{:4}    {:8.3f}{:8.3f}{:8.3f}  1.00  1.00          {:>2}  '.format(
-				i, a.name, a.res_name, a.res_seq,
+				i, atom_name, a.res_name, a.res_seq,
 				a.x, a.y, a.z,
 				a.symbol
 			)
@@ -143,8 +167,10 @@ class Molecule:
 class AminoAcid:
 
 	def __init__(self, code, sequence, molecule):
+		# TODO: rename to res_name to match Atom
 		self.code = code
 		self.ff_code = code
+		# TODO: rename to res_seq to match Atom
 		self.sequence = sequence
 		self.molecule = molecule
 		self.atoms_map = {}
@@ -155,20 +181,53 @@ class AminoAcid:
 		if self.code == 'CYS' and 'HG' not in self.atoms_map:
 			self.ff_code = 'CYX'
 
+		for a in self.atoms_map.values():
+			a.ff_name = a.name
+
 		self.amino_acid_parameters = parameters.get_amino_acid_parameters(self)
 
 		if 'SG' in self.atoms_map and 'HG' not in self.atoms_map:  # disulfid brigde detected
 			self.atoms_map['SG'].type = 'S'
 
+		if 'HB1' not in self.atoms_map and 'HB3' in self.atoms_map:
+			self.atoms_map['HB2'].ff_name = 'HB1'
+			self.atoms_map['HB3'].ff_name = 'HB2'
+
+		if 'HD1' not in self.atoms_map and 'HD3' in self.atoms_map:
+			self.atoms_map['HD2'].ff_name = 'HD1'
+			self.atoms_map['HD3'].ff_name = 'HD2'
+
+		if 'HE1' not in self.atoms_map and 'HE3' in self.atoms_map:
+			self.atoms_map['HE2'].ff_name = 'HE1'
+			self.atoms_map['HE3'].ff_name = 'HE2'
+
+		if 'HG1' not in self.atoms_map and 'HG3' in self.atoms_map:
+			self.atoms_map['HG2'].ff_name = 'HG1'
+			self.atoms_map['HG3'].ff_name = 'HG2'
+
+		# from ILE fix
+		if 'HG11' not in self.atoms_map and 'HG13' in self.atoms_map:
+			self.atoms_map['HG12'].ff_name = 'HG11'
+			self.atoms_map['HG13'].ff_name = 'HG12'
+
+		# TODO: get name mapping from gromacs parameters
+		if self.code == 'ILE':
+			if 'CD1' in self.atoms_map:
+				self.atoms_map['CD1'].ff_name = 'CD'
+			if 'HD11' in self.atoms_map:
+				self.atoms_map['HD11'].ff_name = 'HD1'
+			if 'HD12' in self.atoms_map:
+				self.atoms_map['HD12'].ff_name = 'HD2'
+			if 'HD13' in self.atoms_map:
+				self.atoms_map['HD13'].ff_name = 'HD3'
+
+		if self.is_last():
+			self.atoms_map['O'].ff_name = 'OC1'
+			self.atoms_map['O'].type = 'O2'
+			self.atoms_map['OXT'].ff_name = 'OC2'
+			self.atoms_map['OXT'].type = 'O2'
+
 		for a in self.atoms_map.values():
-			a.set_force_field_parameters(parameters)
-			if self.is_last():
-				if a.name == 'O':
-					a.ff_name = 'OC1'
-					a.type = 'O2'
-				if a.name == 'OXT':
-					a.ff_name = 'OC2'
-					a.type = 'O2'
 			self.force_field_atoms_map[a.ff_name] = a
 
 		for atom in self.atoms_map.values():
@@ -182,51 +241,13 @@ class AminoAcid:
 		last_index = len(self.molecule.atoms) - 1
 		return self.molecule.atoms[last_index].res_seq == self.sequence
 
-
+# TODO move to topology
 class Bond:
 	def __init__(self, atom_01, atom_02, bond_type):
 		self.atom_01 = atom_01
 		self.atom_02 = atom_02
 		self.atoms = (atom_01, atom_02)
 		self.bond_type = bond_type
-
-
-class Angle:
-
-	cache = {}
-
-	def __init__(self, atom_01, atom_02, atom_03, angle_type):
-		self.atom_01 = atom_01
-		self.atom_02 = atom_02
-		self.atom_03 = atom_03
-		self.atoms = (atom_01, atom_02, atom_03)
-		self.angle_type = angle_type
-
-	def get_angle(self):
-		ba = np.array(self.atom_01.point) - np.array(self.atom_02.point)
-		bc = np.array(self.atom_03.point) - np.array(self.atom_02.point)
-		cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
-		angle_radians = np.arccos(cosine_angle)
-		return np.degrees(angle_radians)
-
-
-class Dihedral:
-
-	def __init__(self, atom_01, atom_02, atom_03, atom_04, dihedral_types):
-		self.atom_01 = atom_01
-		self.atom_02 = atom_02
-		self.atom_03 = atom_03
-		self.atom_04 = atom_04
-		self.atoms = (atom_01, atom_02, atom_03, atom_04)
-		self.dihedral_types = dihedral_types
-
-	def get_torsion_angle(self):
-		return inf.geometry.calculate_torsion(
-			self.atom_01.point, self.atom_02.point, self.atom_03.point, self.atom_04.point)
-
-	def get_out_of_plane_angle(self):
-		return inf.geometry.calculate_out_of_plane_angle(
-			self.atom_01.point, self.atom_02.point, self.atom_03.point, self.atom_04.point)
 
 
 class Atom:
@@ -253,38 +274,44 @@ class Atom:
 			if not self.symbol:
 				self.symbol = self.name[0:1]
 			self.point = [self.x, self.y, self.z]
+			self.ff_name = None
 
-	def set_force_field_parameters(self, ffp):
-		# self.name = ffp.get_force_field_atom_name(self.name, self.res_name)
-		self.ff_name = self.name
-		if self.res_name != 'ALA':
-			self.ff_name = re.sub('^HB2$', 'HB1', self.ff_name)  # corrige SER/2
-			self.ff_name = re.sub('^HB3$', 'HB2', self.ff_name)  # corrige SER/2
-		self.ff_name = re.sub('^HG2$', 'HG1', self.ff_name)  # corrige GLU/4
-		self.ff_name = re.sub('^HG3$', 'HG2', self.ff_name)  # corrige GLU/4
-		if self.res_name != 'HIS':
-			self.ff_name = re.sub('^HD2$', 'HD1', self.ff_name)  # corrige PRO/7
-			self.ff_name = re.sub('^HD3$', 'HD2', self.ff_name)  # corrige PRO/7
-		self.ff_name = re.sub('^HE2$', 'HE1', self.ff_name)  # corrige LYS/14
-		self.ff_name = re.sub('^HE3$', 'HE2', self.ff_name)  # corrige LYS/14
+	def move(self, position):
+		self.x = position[0]
+		self.y = position[1]
+		self.z = position[2]
+		self.point = [self.x, self.y, self.z]
 
-		if self.res_name == 'ILE':
-			self.ff_name = re.sub('^CD1$', 'CD', self.ff_name)  # corrige ILE/29
-			self.ff_name = re.sub('^HD11$', 'HD1', self.ff_name)  # corrige ILE/29
-			self.ff_name = re.sub('^HD12$', 'HD2', self.ff_name)  # corrige ILE/29
-			self.ff_name = re.sub('^HD13$', 'HD3', self.ff_name)  # corrige ILE/29
-			self.ff_name = re.sub('^HG12$', 'HG11', self.ff_name)  # corrige ILE/29
-			self.ff_name = re.sub('^HG13$', 'HG12', self.ff_name)  # corrige ILE/29
-
-	def shift_coordinate_origing(self):
+	def reset_starting_point(self):
 		self.original_x = self.x
 		self.original_y = self.y
 		self.original_z = self.z
+		return self
 
-	def translate(self, position):
+	def translate_starting_point(self, position):
 		self.x = self.original_x + position[0]
 		self.y = self.original_y + position[1]
 		self.z = self.original_z + position[2]
+		self.point = [self.x, self.y, self.z]
+		return self
+
+	def translate(self, position):
+		self.x = self.x + position[0]
+		self.y = self.y + position[1]
+		self.z = self.z + position[2]
+		self.point = [self.x, self.y, self.z]
+		# TODO: reset_starting_point ?
+		return self
+
+	def rotate_starting_angle(self, angles):
+		x_rotation = Quaternion(axis=[1, 0, 0], radians=angles[0])
+		y_rotation = Quaternion(axis=[0, 1, 0], radians=angles[1])
+		z_rotation = Quaternion(axis=[0, 0, 1], radians=angles[2])
+		rotation = x_rotation * y_rotation * z_rotation
+		rotated = rotation.rotate([self.original_x, self.original_y, self.original_z])
+		self.x = rotated[0]
+		self.y = rotated[1]
+		self.z = rotated[2]
 		self.point = [self.x, self.y, self.z]
 
 	def is_in(self, *args):
@@ -294,7 +321,14 @@ class Atom:
 		return self.name.startswith('CA')
 
 	def is_backbone(self):
+		return self.name in ['N', 'CA', 'C', 'O', 'OXT', 'H', 'H1', 'H2', 'H3', 'HA']
+
+	# http://kinemage.biochem.duke.edu/teaching/anatax/html/anatax.1b.html
+	def is_forming_important_dihedral(self):
 		return self.name in ['N', 'CA', 'C']
+
+	def is_forming_side_chain_dihedral(self):
+		return self.name[0] != 'H' and (not self.is_backbone() or self.name in ['CA'])
 
 	def distance_of(self, a2):
 		dx = a2.x - self.x
@@ -306,6 +340,7 @@ class Atom:
 		copied = Atom()
 		copied.serial = self.serial
 		copied.name = self.name
+		copied.ff_name = self.ff_name
 		copied.type = self.type
 		copied.charge = self.charge
 		copied.alt_loc = self.alt_loc

@@ -15,21 +15,24 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import random, math
-#from pyquaternion import Quaternion
 
-class Particle():
+
+class Particle:
+	sequence = 1
 
 	def __init__(self):
+		self.id = Particle.sequence
+		Particle.sequence += 1
 		self.position = [0, 0, 0]
-		#self.direction = [0, 0, 0]
+		self.direction = [0, 0, 0]
 
 	def move(self, velocity):
 		self.position[0] = self.position[0] + velocity.shift[0]
 		self.position[1] = self.position[1] + velocity.shift[1]
 		self.position[2] = self.position[2] + velocity.shift[2]
-		#self.direction[0] = self.direction[0] + velocity.rotation[0]
-		#self.direction[1] = self.direction[1] + velocity.rotation[1]
-		#self.direction[2] = self.direction[2] + velocity.rotation[2]
+		self.direction[0] = self.direction[0] + velocity.rotation[0]
+		self.direction[1] = self.direction[1] + velocity.rotation[1]
+		self.direction[2] = self.direction[2] + velocity.rotation[2]
 
 	def translate(self, delta):
 		self.position[0] = self.position[0] + delta[0]
@@ -48,7 +51,7 @@ class Particle():
 	def copy(self):
 		copied = Particle()
 		copied.position = list(self.position)
-		#copied.direction = list(self.direction)
+		copied.direction = list(self.direction)
 		return copied
 
 	def position_delta(self, reference_particle):
@@ -63,18 +66,26 @@ class Particle():
 		delta_z = reference_particle.direction[2] - self.direction[2]
 		return [delta_x, delta_y, delta_z]
 
-	def move_to_random_place(self):
-		self.position = [random_position(), random_position(), random_position()]
-		#self.direction = [random.random() * 2, random.random() * 2, random.random() * 2]
-		return self
-
 	def to_string(self):
 		cp = self.position
 		#cd = self.direction
 		#return '{:+10.5f} {:+10.5f} {:+10.5f} | {:+10.5f} {:+10.5f} {:+10.5f}'.format(cp[0], cp[1], cp[2], cd[0], cd[1], cd[2])
 		return '{:+10.5f} {:+10.5f} {:+10.5f}'.format(cp[0], cp[1], cp[2])
 
-class Velocity():
+	@staticmethod
+	def create_particles(number):
+		particles = []
+		for i in range(number):
+			particles.append(Particle().move_to_random_place())
+		return particles
+
+	def move_to_random_place(self):
+		self.position = [random_position(), random_position(), random_position()]
+		self.direction = [random.random(), random.random(), random.random()]
+		return self
+
+
+class Velocity:
 
 	def __init__(self):
 		self.shift = []
@@ -85,24 +96,18 @@ class Velocity():
 		self.rotation = [random_rotation(), random_rotation(), random_rotation()]
 		return self
 
-
-def create_particles(number):
-	particles = []
-	for i in range(number):
-		particles.append(Particle().move_to_random_place())
-	return particles
-
-def create_velocities(number):
-	velocities = []
-	for i in range(number):
-		velocities.append(Velocity().set_random_speed())
-	return velocities
+	@staticmethod
+	def create_velocities(number):
+		velocities = []
+		for i in range(number):
+			velocities.append(Velocity().set_random_speed())
+		return velocities
 
 def random_position():
-	return random.random() / 100
+	return random.random() * 20 - 0
 
 def random_velocity():
-	return 0.01
+	return random.random() * 1
 
 def random_rotation():
-	return random.random() * 0.2
+	return random.random() / 1

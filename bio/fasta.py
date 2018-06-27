@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
+from bio.topology import Dihedral
 import numpy as np
 
 code_map = {
@@ -44,24 +45,88 @@ code_map = {
 	'Z': 'GLX',  # Glutamic acid (E) or Glutamine (Q)
 }
 
-input = 'NLYIQWLKDGGPSSGRPPPS'
 
-output = Molecule()
-pointer = np.array([0, 0, 0])
-separator = np.array([1, 0, 0])
-i = 0
-for a in input:
-	i += 1
-	abreviation = code_map[a]
-	# residue = Molecule(pdb_file_location='/home/pedro/dev/src/bioinf/data/catalog/' + abreviation + '.pdb')
-	residue = Molecule(pdb_file_location='data/catalog/' + abreviation + '.pdb')
-	n_terminal = residue.amino_acids[0].atoms_map['N']
-	c_terminal = residue.amino_acids[0].atoms_map['C']
-	delta = np.array(n_terminal.point) - np.array(pointer)
-	residue.dislocate(-delta)
-	for a in residue.atoms:
-		a.res_seq = i
-		output.atoms.append(a.copy())
-	print(abreviation)
-	pointer = np.array(c_terminal.point) + separator
-output.write_all('/home/pedro/tmp', 'generated.pdb')
+class Fasta:
+
+	def __init__(self, sequence):
+		self.sequence = sequence
+		self.molecule = Molecule()
+
+	def to_pdb(self):
+		self._populate_molecule()
+		self.molecule.add_sequential_ids()
+		self.molecule.update_internal_state()
+		self._rotate_to_default_position()
+		return self.molecule
+
+	def _populate_molecule(self):
+		pointer = np.array([0, 0, 0])
+		c_n_separator = np.array([1.3350, 0, 0])
+		i = 0
+		for a in self.sequence:
+			i += 1
+			abbreviation = code_map[a]
+			residue = Molecule(pdb_file_location='data/catalog/' + abbreviation + '.pdb')
+			if i == 1:
+				Fasta._add_n_terminal_hydrogen(residue)
+
+			if i == len(self.sequence):
+				Fasta._add_c_terminal_oxygen(residue)
+
+			n_terminal = residue.amino_acids[0].atoms_map['N']
+			c_terminal = residue.amino_acids[0].atoms_map['C']
+			delta = np.array(n_terminal.point) - np.array(pointer)
+			residue.translate(-delta)
+			for a in residue.atoms:
+				a.res_seq = i
+				self.molecule.atoms.append(a.copy())
+			pointer = np.array(c_terminal.point) + c_n_separator
+
+	def _rotate_to_default_position(self):
+		parameters = Parameters()
+		self.molecule.set_force_field_parameters(parameters)
+		topology = self.molecule.get_topology()
+		for i in range(len(self.molecule.amino_acids)):
+			amino_acid = self.molecule.amino_acids[i]
+			if not amino_acid.is_last():
+				topology.fix_nitrogen(amino_acid, self.molecule.amino_acids[i + 1])
+				topology.fix_oxygen(amino_acid, self.molecule.amino_acids[i + 1])
+			backbone_torsions_map = topology.backbone_torsions_map[amino_acid.sequence]
+			if 'OMEGA' in backbone_torsions_map:
+				omega = topology.backbone_torsions_map[amino_acid.sequence]['OMEGA']
+				target_omega = 180.0
+				topology.rotate_proper_dihedral(omega, target_omega)
+			if i > 0:
+				last_r = self.molecule.amino_acids[i - 1]
+				if 'CB' in amino_acid.atoms_map:
+					side_chain_torsion = Dihedral(last_r.atoms_map['C'], amino_acid.atoms_map['N'], amino_acid.atoms_map['CA'], amino_acid.atoms_map['CB'], None)
+					topology.rotate_proper_dihedral(side_chain_torsion, 180)
+
+		for i in range(len(self.molecule.amino_acids)):
+			amino_acid = self.molecule.amino_acids[i]
+
+			if not amino_acid.is_last():
+				topology.fix_amine_hydrogen_torsion(amino_acid, self.molecule.amino_acids[i + 1])
+				topology.fix_amine_hydrogen(amino_acid, self.molecule.amino_acids[i + 1])
+				topology.fix_alpha_carbon(amino_acid, self.molecule.amino_acids[i + 1])
+			topology.fix_amine_hydrogen_angle_to_ca(amino_acid)
+
+	@staticmethod
+	def _add_n_terminal_hydrogen(residue):
+		h_atom = residue.amino_acids[0].atoms_map['H']
+		h_atom.name = 'H1'
+		h2 = h_atom.copy().translate([0, -0.8, 0])
+		h3 = h_atom.copy().translate([0, -1.6, 0])
+		h2.name = 'H2'
+		h3.name = 'H3'
+		residue.atoms.append(h2)
+		residue.atoms.append(h3)
+		residue.update_internal_state()
+
+	@staticmethod
+	def _add_c_terminal_oxygen(residue):
+		o_atom = residue.amino_acids[0].atoms_map['O']
+		oxt_atom = o_atom.copy().translate([-1.7,  -1, 0.7])
+		oxt_atom.name = 'OXT'
+		residue.atoms.append(oxt_atom)
+		residue.update_internal_state()

@@ -73,15 +73,14 @@ class Parameters:
 					return matches_03[0]
 
 	def get_proper_dihedral_type(self, type_01, type_02, type_03, type_04):
-		if type_01 == 'N3':
-			type_01 = 'N'
+		result = []
 		dihedral_type = self._get_dihedral_type(type_01, type_02, type_03, type_04, self.proper_dihedral_types)
-		# TODO: fix
 		if dihedral_type:
-			mirror_components = self._get_dihedral_type(type_04, type_03, type_02, type_01, self.proper_dihedral_types)
-			if mirror_components:
-				dihedral_type = list(dihedral_type) + list(mirror_components)
-		return dihedral_type
+			result = list(dihedral_type)
+		mirror_components = self._get_dihedral_type(type_04, type_03, type_02, type_01, self.proper_dihedral_types)
+		if mirror_components:
+			result += list(mirror_components)
+		return result
 
 	def get_improper_dihedral_type(self, type_01, type_02, type_03, type_04):
 		return self._get_dihedral_type(type_01, type_02, type_03, type_04, self.improper_dihedral_types)
@@ -131,7 +130,9 @@ class Parameters:
 					atom = AminoAcidAtomParameters(line)
 					last_aminoacid.atoms_map[atom.code] = atom
 				elif last_property == 'bonds':
-					last_aminoacid.bonds.append(AminoAcidBondParameters(line, last_aminoacid))
+					bond = AminoAcidBondParameters(line, last_aminoacid)
+					if not bond.is_marker():
+						last_aminoacid.bonds.append(bond)
 
 	def load_bond_types(self):
 		f = open('data/amber99.ff/ffbonded.itp', 'r')
@@ -283,15 +284,23 @@ class AminoAcidAtomParameters():
 		self.charge_group = int(values[3])
 
 
-class AminoAcidBondParameters():
+class AminoAcidBondParameters:
 
 	def __init__(self, line, amino_acid_parameters):
 		self.atom_01_parameter = line[0:6].strip()
 		self.atom_02_parameter = line[6:12].strip()
 		self.atom_01_code = self.atom_01_parameter.replace('-', '').replace('+', '')
 		self.atom_02_code = self.atom_02_parameter.replace('-', '').replace('+', '')
+		self.atom_01_type = self.atom_02_type = None
 		if self.atom_01_code in amino_acid_parameters.atoms_map:
 			self.atom_01_type = amino_acid_parameters.atoms_map[self.atom_01_code].type
 		if self.atom_02_code in amino_acid_parameters.atoms_map:
 			self.atom_02_type = amino_acid_parameters.atoms_map[self.atom_02_code].type
+
+	def is_marker(self):
+		if self.atom_01_parameter == '-C':
+			return True
+		if self.atom_02_parameter == '+N':
+			return True
+		return False
 

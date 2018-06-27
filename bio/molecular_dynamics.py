@@ -20,8 +20,8 @@ import math
 from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
 from bio.pdb import Bond
-from bio.pdb import Angle
-from bio.pdb import Dihedral
+from bio.topology import Angle
+from bio.topology import Dihedral
 from bio.topology import Topology
 import itertools
 import inf.geometry
@@ -47,7 +47,7 @@ class ForceField():
 		self.vdw_e = 0
 		self.eletrostatic_e = 0
 
-	def calculate_energy(self, molecule, atom=None):
+	def calculate_energy(self, molecule, atom=None, protect_bonds=False):
 		self._clean_energy_values()
 		self.molecule = molecule
 		self.topology = molecule.get_topology()
@@ -61,6 +61,9 @@ class ForceField():
 			r_eq = bond.bond_type.equilibrium_bond_length
 			self.bonds_e += k * math.pow(r - r_eq, 2)
 
+		if protect_bonds:
+			self.bonds_e = math.pow(self.bonds_e, 2)
+
 		# calculate angle energy
 		for i in range(len(self.topology.angles)):
 			angle = self.topology.angles[i]
@@ -72,6 +75,7 @@ class ForceField():
 			self.angles_e += k * math.pow(math.radians(a - a_eq), 2)
 
 		# calculate proper dihedral energy
+		# ;i  j   k  l	 func      phase      kd      pn
 		# C   N   CT  C     9     180.0      3.55640     2  ;
 		# C   N   CT  C     9       0.0      3.34720     1  ;
 		# http://www.wolframalpha.com/input/?i=3.34720%2F2+*+(+1+%2B+cos(+x+*+1+-+0+pi))+%2B+3.55640%2F2+*+(+1+%2B+cos(+x+*+2+-+1+pi))

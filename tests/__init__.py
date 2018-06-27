@@ -1,8 +1,10 @@
 import unittest
 from unittest import TestSuite
-from tests.bio import BioTestCase
+from tests.amber_ff_test import AmberTestCase
+from tests.fasta_test import FastaTestCase
 
-test_cases = (BioTestCase,)
+test_cases = (AmberTestCase, FastaTestCase,)
+
 
 def load_tests(loader, tests, pattern):
     suite = TestSuite()
