@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import time, gc
+import numpy as np
 from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
 from bio.molecular_dynamics import ForceField
@@ -28,6 +29,14 @@ class Docking:
 	def __init__(self, complex=None, ligand=None, receptor=None):
 		self.complex = complex
 		self.ligand = ligand
+		starting_point = np.array([11.102, 24.461, 1.386])
+		starting_point += np.array([7.5]*3)
+		current_point = self.ligand.atoms[30].point
+		delta_to_starting_point = current_point - starting_point
+
+		self.ligand.translate(delta_to_starting_point)
+		self.ligand.reset_starting_point()
+
 		self.receptor = receptor
 		self.parameters = Parameters()
 		self.complex.set_force_field_parameters(self.parameters)
@@ -43,51 +52,46 @@ class Docking:
 		self.force_field.print_energy()
 		self.ligand_energy = self.force_field.energy
 
-
-		complex_topology = self.receptor.get_topology()
-		complex_topology.add_participant(self.ligand.get_topology())
-		self.force_field.calculate_energy(complex_topology)
+		self.complex_topology = self.receptor.get_topology()
+		self.complex_topology.add_participant(self.ligand.get_topology())
+		self.force_field.calculate_energy(self.complex_topology)
 		self.force_field.print_energy()
 		self.complex_energy = self.force_field.energy
+		self.docking_energy = self.complex_energy - self.ligand_energy - self.receptor_energy
 
-		self.iterations = 1
+		print('Ligand energy: {:10.3f}'.format(self.ligand_energy))
+		print('Receptor energy: {:10.3f}'.format(self.receptor_energy))
+		print('Complex energy: {:10.3f}'.format(self.complex_energy))
+		print('Docking energy: {:10.3f}'.format(self.docking_energy))
 
-		self.optimization = Pso(self.molecule_energy_function)
+		self.pso = Pso(self.complex_energy_function)
+		self.pso.set_bounds(-180, 180)
+		self.pso.dimensions_number = 3
+		self.pso.number_of_particles = 8
+		self.pso.iterations = 3
+		self.pso.personal_best_retention = 0.003
+		self.pso.global_best_retention = 0.03
+		self.pso.inertia = 1
 
-	def molecule_energy_function(self, particle):
+	def complex_energy_function(self, particle):
 		a = self.atoms[self.atom_index]
 		a.translate(particle.position)
 		return self.force_field.calculate_energy(self.molecule)
 
-	def show_atom(self):
-		atom = self.atoms[self.atom_index]
-		print('Energy for atom({:d}) {}'.format(atom.serial, atom.name))
-		self.force_field.calculate_energy(self.molecule, atom)
+	def apply_particle(self, particle):
+		self.ligand.translate_starting_point(particle.dimensions)
+
+	def run(self):
+		optimization = self.pso
+		optimization.run()
+		self.apply_particle(optimization.best_particle)
+		self.force_field.calculate_energy(self.molecule.get_topology())
 		self.force_field.print_energy()
-
-	def show_molecule(self):
-		self.force_field.calculate_energy(self.molecule)
-		self.force_field.print_energy()
-
-	def _print_iteration(self, i, j, atom):
-		self.force_field.calculate_energy(self.molecule)
-		rmsd = self.original_molecule.rmsd(self.molecule)
-		print('\t{:03}\t{:03}\t{:10.5f}\t{:10.7f}\t{}-{}({:03})'.format(i, j, self.force_field.energy, rmsd, atom.res_name, atom.name, atom.serial))
-
-	def run_per_atom(self):
-		for i in range(self.iterations):
-			self.atom_index = 0
-			# self._sort_by_energy()
-			m.reset_starting_point()
-			for j in range(self.number_of_atoms):
-				self.optimization.run()
-				atom = self.atoms[self.atom_index]
-				atom.translate_starting_point(self.optimization.best_particle.dimensions)
-				self.atom_index += 1
-				self._print_iteration(i, j, atom)
-			print('Molecule energy at the end of iteration {}: '.format(i))
-			self.show_molecule()
-			m.write('/home/pedro/tmp', 'optimized-{:02}.pdb'.format(i))
+		import sys
+		if len(sys.argv) > 1:
+			m.write('/home/pedro/tmp', 'best-' + sys.argv[1] + '.pdb')
+		else:
+			m.write('/home/pedro/tmp', 'best.pdb')
 
 
 m_cristal = Molecule(pdb_file_location='/home/pedro/tmp/docking/cristal.pdb')

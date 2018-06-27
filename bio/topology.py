@@ -346,6 +346,7 @@ class Topology:
 
 	def add_participant(self, participant):
 		self.eletrostatic_map += participant.eletrostatic_map
+		self.eletrostatic_map = []
 		for i in range(len(self.molecule.atoms)):
 			for p_atom in participant.molecule.atoms:
 				self.eletrostatic_map.append((self.molecule.atoms[i], p_atom))

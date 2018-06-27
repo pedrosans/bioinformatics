@@ -98,13 +98,6 @@ class Molecule:
 		for a in self.atoms:
 			a.reset_starting_point()
 
-	def move_origin(self, point):
-		import numpy
-		delta = numpy.array(self.atoms[0].point) - numpy.array(point)
-		for a in self.atoms:
-			a.translate(-delta)
-			a.reset_starting_point()
-
 	def translate(self, shift):
 		for atom in self.atoms:
 			atom.translate(shift)

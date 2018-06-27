@@ -148,8 +148,6 @@ class ForceField:
 		if atom_01.charge and atom_02.charge:
 			self.eletrostatic_e += ELECTRON_TO_KJ_PER_MOL_CONSTANT * atom_01.charge * atom_02.charge / distance
 		# VDW
-		if not atom_02.type:
-			print('asdf')
 		atom_01_type = self.parameters.atom_types[atom_01.type]
 		atom_02_type = self.parameters.atom_types[atom_02.type]
 		radio_ratio = ((atom_01_type.sigma + atom_02_type.sigma) / 2) / distance
