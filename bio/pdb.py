@@ -66,9 +66,11 @@ class Molecule:
 			self.topology = Topology(self, self.force_field_parameters)
 			if self.amino_acids[0].is_standard():
 				self.topology.read_bonds_from_ff()
+				self.topology.mount_topology()
 			else:
-				self.topology.read_bonds_from_ff()
-			self.topology.mount_topology()
+				self.topology.read_bonds_from_pdb_file()
+				self.topology.mount_topology(read_atom_types_from_bonds=True)
+
 		return self.topology
 
 	def add_sequential_ids(self):
@@ -310,9 +312,8 @@ class Atom:
 			self.x = self.original_x = float(pdb_atom_line[30:38])
 			self.y = self.original_y = float(pdb_atom_line[38:46])
 			self.z = self.original_z = float(pdb_atom_line[46:54])
-			self.symbol = pdb_atom_line[76:77].strip()
-			if not self.symbol:
-				self.symbol = self.name[0:1]
+			self.symbol = pdb_atom_line[76:78].strip()
+			# if not self.symbol: self.symbol = self.name[0:1]
 			self.point = np.array([self.x, self.y, self.z])
 			self.ff_name = None
 

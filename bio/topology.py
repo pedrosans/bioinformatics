@@ -253,8 +253,16 @@ class Topology:
 			self.interacting[bond.atom_01.serial][bond.atom_02.serial] = True
 			self.interacting[bond.atom_02.serial][bond.atom_01.serial] = True
 
-	def mount_topology(self):
+	def read_atom_types_from_bonds(self):
+		for atom in self.molecule.atoms:
+			atom.type = atom.symbol
+
+	def mount_topology(self, read_atom_types_from_bonds=False):
 		self.mount_bond_map()
+
+		if read_atom_types_from_bonds:
+			self.read_atom_types_from_bonds()
+
 		#mount angles list
 		for atom in self.molecule.atoms:
 			for i in range(len(self.bonds_map[atom.serial])):

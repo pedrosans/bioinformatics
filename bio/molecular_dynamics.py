@@ -32,8 +32,9 @@ import inf.geometry
 # http://m.wolframalpha.com/input/?i=332+kcal*+Angstrom+%2F%28mol+q%5E2%29+to+kj*nm%2F%28mol+q%5E2%29
 ELETRON_TO_KJ_PER_MOL_CONSTANT = 138.93541024
 
-class ForceField():
+class ForceField:
 
+	# TODO: remove parameters, the molecule one should be used
 	def __init__(self, parameters):
 		self.parameters = parameters
 		self.molecule = self.topology = None
@@ -74,16 +75,22 @@ class ForceField():
 				print('warn: angle {} {}({}-{}) {}'.format(angle.atom_01.name, angle.atom_02.name, angle.atom_02.res_name, angle.atom_02.res_seq, angle.atom_03.name))
 			self.angles_e += angle_e
 
-	def calculate_energy(self, molecule, atom=None, protect_bonds=False, test_phi_psi_torsions_only=False, warn_high_energy=False):
+	def calculate_energy(self, molecule, atom=None,
+						 protect_bonds=False,
+						 test_phi_psi_torsions_only=False,
+						 test_electrostatic_only=False,
+						 warn_high_energy=False):
 		self._clean_energy_values()
 		self.molecule = molecule
 		self.topology = molecule.get_topology()
 
-		self._calculate_bond_energy(atom)
-		if protect_bonds:
-			self.bonds_e = math.pow(self.bonds_e, 2)
+		if not test_electrostatic_only:
+			self._calculate_bond_energy(atom)
+			if protect_bonds:
+				self.bonds_e = math.pow(self.bonds_e, 2)
 
-		self._calculate_angle_energy(atom, warn_high_energy)
+		if not test_electrostatic_only:
+			self._calculate_angle_energy(atom, warn_high_energy)
 
 		# calculate proper dihedral energy
 		# ;i  j   k  l	 func      phase      kd      pn
@@ -91,6 +98,7 @@ class ForceField():
 		# C   N   CT  C     9       0.0      3.34720     1  ;
 		# http://www.wolframalpha.com/input/?i=3.34720%2F2+*+(+1+%2B+cos(+x+*+1+-+0+pi))+%2B+3.55640%2F2+*+(+1+%2B+cos(+x+*+2+-+1+pi))
 		for dihedral in self.topology.proper_dihedrals:
+			if test_electrostatic_only: break
 			if atom and atom not in dihedral.atoms:
 				continue
 			if test_phi_psi_torsions_only and dihedral not in self.topology.phi_psi_torsions:
@@ -104,6 +112,7 @@ class ForceField():
 
 		# calculate improper dihedral energy
 		for dihedral in self.topology.improper_dihedrals:
+			if test_electrostatic_only: break
 			if atom and atom not in dihedral.atoms:
 				continue
 			if test_phi_psi_torsions_only:

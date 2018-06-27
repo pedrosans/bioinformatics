@@ -29,10 +29,9 @@ class TopologyTestCase(unittest.TestCase):
 
 	def test_read_molecule(self):
 		self.topology.read_bonds_from_pdb_file()
-		self.topology.mount_bond_map()
+		self.topology.mount_topology(read_atom_types_from_bonds=True)
 		self.topology.print_topology()
-		self.topology.print_bonds()
-		print('fim')
+		self.assertEquals(len(self.topology.bonds), 33)
 
 
 if __name__ == '__main__':

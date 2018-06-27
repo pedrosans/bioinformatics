@@ -5,10 +5,11 @@ from tests.fasta_test import FastaTestCase
 from tests.minimization_test import MinimizationTestCase
 from tests.pdb_test import PdbTestCase
 from tests.topology_test import TopologyTestCase
+from tests.energy_test import EnergyTestCase
 
 test_cases = (AmberTestCase, FastaTestCase,
 				MinimizationTestCase, PdbTestCase,
-				TopologyTestCase,)
+				TopologyTestCase, EnergyTestCase,)
 
 
 def load_tests(loader, tests, pattern):

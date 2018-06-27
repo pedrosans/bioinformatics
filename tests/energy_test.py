@@ -15,26 +15,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import unittest
-import bio
-from unittest.mock import patch
-from unittest.mock import MagicMock
 from bio.parameters99ff import Parameters
 from bio.pdb import Molecule
+from bio.molecular_dynamics import ForceField
 
 
-class PdbTestCase(unittest.TestCase):
+class EnergyTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.parameters = Parameters()
 		self.ligand = Molecule(pdb_file_location='tests/data/ligand.pdb')
 		self.ligand.set_force_field_parameters(self.parameters)
+		self.force_field = ForceField(self.parameters)
 
-	def test_read_molecule(self):
-		self.assertEqual(len(self.ligand.atoms), 31)
-
-	def test_create_topology(self):
-		topology = self.ligand.get_topology()
-		self.assertEqual(len(topology.bonds), 33)
+	def test_calculate_non_standard_res_energy(self):
+		self.force_field.calculate_energy(self.ligand, test_electrostatic_only=True)
+		self.force_field.print_energy()
 
 
 if __name__ == '__main__':
