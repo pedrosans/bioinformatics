@@ -44,14 +44,14 @@ class MinimizationTestCase(unittest.TestCase):
 			atom.translate_starting_point(self.optimization.best_particle.dimensions)
 			self.atom_index += 1
 
-		energy = self.force_field.calculate_energy(self.molecule)
+		energy = self.force_field.calculate_energy(self.molecule.get_topology())
 		# self.force_field.print_energy()
 		self.assertEqual(energy, 599.882043366674)
 
 	def atom_energy_function(self, particle):
 		a = self.molecule.atoms[self.atom_index]
 		a.translate_starting_point(particle.dimensions)
-		return self.force_field.calculate_energy(self.molecule, atom=a, protect_bonds=False)
+		return self.force_field.calculate_energy(self.molecule.get_topology(), atom=a, protect_bonds=False)
 
 
 if __name__ == '__main__':

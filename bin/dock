@@ -35,10 +35,20 @@ class Docking:
 		self.receptor.set_force_field_parameters(self.parameters)
 
 		self.force_field = ForceField(self.parameters)
-		self.force_field.calculate_energy(self.receptor)
+		self.force_field.calculate_energy(self.receptor.get_topology())
 		self.force_field.print_energy()
-		self.force_field.calculate_energy(self.ligand, test_electrostatic_only=True)
+		self.receptor_energy = self.force_field.energy
+
+		self.force_field.calculate_energy(self.ligand.get_topology(), test_electrostatic_only=True)
 		self.force_field.print_energy()
+		self.ligand_energy = self.force_field.energy
+
+
+		complex_topology = self.receptor.get_topology()
+		complex_topology.add_participant(self.ligand.get_topology())
+		self.force_field.calculate_energy(complex_topology)
+		self.force_field.print_energy()
+		self.complex_energy = self.force_field.energy
 
 		self.iterations = 1
 

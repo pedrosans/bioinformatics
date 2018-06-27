@@ -56,7 +56,7 @@ class Prediction:
 	def molecule_energy(self, particle):
 		self.computations += 1
 		self.apply_particle(particle)
-		return self.force_field.calculate_energy(self.molecule, test_phi_psi_torsions_only=True)
+		return self.force_field.calculate_energy(self.molecule.get_topology(), test_phi_psi_torsions_only=True)
 		# return self.force_field.calculate_energy(self.molecule, test_phi_psi_torsions_only=False)
 
 	def apply_particle(self, particle):
@@ -74,7 +74,7 @@ class Prediction:
 		optimization = self.pso
 		optimization.run()
 		self.apply_particle(optimization.best_particle)
-		self.force_field.calculate_energy(self.molecule)
+		self.force_field.calculate_energy(self.molecule.get_topology())
 		self.force_field.print_energy()
 		import sys
 		if len(sys.argv) > 1:

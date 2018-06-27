@@ -30,14 +30,15 @@ import inf.geometry
 # Coulomb's constant
 # http://www.ks.uiuc.edu/Research///namd/1.5/ug/node67.html
 # http://m.wolframalpha.com/input/?i=332+kcal*+Angstrom+%2F%28mol+q%5E2%29+to+kj*nm%2F%28mol+q%5E2%29
-ELETRON_TO_KJ_PER_MOL_CONSTANT = 138.93541024
+ELECTRON_TO_KJ_PER_MOL_CONSTANT = 138.93541024
+
 
 class ForceField:
 
 	# TODO: remove parameters, the molecule one should be used
 	def __init__(self, parameters):
 		self.parameters = parameters
-		self.molecule = self.topology = None
+		self.topology = None
 		self.energy = self.bonds_e = self.angles_e = self.proper_dihedrals_e = self.improper_dihedrals_e = self.vdw_e = None
 		self._clean_energy_values()
 
@@ -75,14 +76,14 @@ class ForceField:
 				print('warn: angle {} {}({}-{}) {}'.format(angle.atom_01.name, angle.atom_02.name, angle.atom_02.res_name, angle.atom_02.res_seq, angle.atom_03.name))
 			self.angles_e += angle_e
 
-	def calculate_energy(self, molecule, atom=None,
+	def calculate_energy(self, topology,
+						 atom=None,
 						 protect_bonds=False,
 						 test_phi_psi_torsions_only=False,
 						 test_electrostatic_only=False,
 						 warn_high_energy=False):
 		self._clean_energy_values()
-		self.molecule = molecule
-		self.topology = molecule.get_topology()
+		self.topology = topology
 
 		if not test_electrostatic_only:
 			self._calculate_bond_energy(atom)
@@ -124,9 +125,9 @@ class ForceField:
 				oop_angle = dihedral.get_out_of_plane_angle()
 				self.improper_dihedrals_e += Vn / 2 * (1 + math.cos(math.radians(n * oop_angle - gamma)))
 
-		# calculate vdw and eletrostatical energy
+		# calculate vdw and electrostatic energy
 		if atom:
-			for other in self.molecule.atoms:
+			for other in topology.molecule.atoms:
 				if atom.serial == other.serial:
 					continue
 				if atom.serial in self.topology.interacting[other.serial]:
@@ -145,8 +146,10 @@ class ForceField:
 		distance = atom_01.distance_of(atom_02)
 		distance = distance / 10  # converting from Angstrom to nm
 		if atom_01.charge and atom_02.charge:
-			self.eletrostatic_e += ELETRON_TO_KJ_PER_MOL_CONSTANT * atom_01.charge * atom_02.charge / distance
+			self.eletrostatic_e += ELECTRON_TO_KJ_PER_MOL_CONSTANT * atom_01.charge * atom_02.charge / distance
 		# VDW
+		if not atom_02.type:
+			print('asdf')
 		atom_01_type = self.parameters.atom_types[atom_01.type]
 		atom_02_type = self.parameters.atom_types[atom_02.type]
 		radio_ratio = ((atom_01_type.sigma + atom_02_type.sigma) / 2) / distance

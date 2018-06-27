@@ -31,14 +31,18 @@ class EnergyTestCase(unittest.TestCase):
 		self.force_field = ForceField(self.parameters)
 
 	def test_non_standard_res_energy(self):
-		self.force_field.calculate_energy(self.ligand, test_electrostatic_only=True)
-		self.force_field.print_energy()
+		self.force_field.calculate_energy(self.ligand.get_topology(), test_electrostatic_only=True)
 		self.assertEquals(self.force_field.energy, 553.28142232581)
 
 	def test_standard_res_energy(self):
-		self.force_field.calculate_energy(self.protein, test_electrostatic_only=False)
-		self.force_field.print_energy()
+		self.force_field.calculate_energy(self.protein.get_topology(), test_electrostatic_only=False)
 		self.assertEquals(self.force_field.energy, 606.3322671759454)
+
+	def test_complex_energy(self):
+		topology = self.protein.get_topology()
+		topology.add_participant(self.ligand.get_topology())
+		self.force_field.calculate_energy(topology, test_electrostatic_only=False)
+		self.assertEquals(self.force_field.energy, 1159.548966028706)
 
 
 if __name__ == '__main__':
