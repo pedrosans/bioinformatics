@@ -162,7 +162,7 @@ class Molecule:
 		f = self._open_file(directory, file_name)
 		i = 0
 		for line in self.pdb_file_content.splitlines():
-			if 'ATOM' in line:
+			if 'ATOM' in line or 'HETATM' in line:
 				atom = self.atoms[i]
 				i += 1
 				new_line = '{}{}{}\n'.format(line[0:30], '{:8.3f}{:8.3f}{:8.3f}'.format(atom.x, atom.y, atom.z), line[54:])

@@ -158,10 +158,10 @@ class ForceField:
 		self.vdw_e += bond_vdw
 
 	def print_energy(self):
-		print('  bond              :\t{0:.6f}'.format(self.bonds_e))
-		print('  angles            :\t{0:.6f}'.format(self.angles_e))
-		print('  proper dihedrals  :\t{0:.6f}'.format(self.proper_dihedrals_e))
-		print('  improper dihedrals:\t{0:.6f}'.format(self.improper_dihedrals_e))
-		print('  vdw               :\t{0:.6f}'.format(self.vdw_e))
-		print('  eletrostatic      :\t{0:.6f}'.format(self.eletrostatic_e))
-		print('  total             :\t{0:.6f} KJ/mol'.format(self.energy))
+		print('  bond              :\t{:15.6f}'.format(self.bonds_e))
+		print('  angles            :\t{:15.6f}'.format(self.angles_e))
+		print('  proper dihedral   :\t{:15.6f}'.format(self.proper_dihedrals_e))
+		print('  improper dihedral :\t{:15.6f}'.format(self.improper_dihedrals_e))
+		print('  vdw               :\t{:15.6f}'.format(self.vdw_e))
+		print('  electrostatic     :\t{:15.6f}'.format(self.eletrostatic_e))
+		print('  total             :\t{:15.6f} KJ/mol'.format(self.energy))

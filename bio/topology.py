@@ -346,7 +346,6 @@ class Topology:
 
 	def add_participant(self, participant):
 		self.eletrostatic_map += participant.eletrostatic_map
-		self.eletrostatic_map = []
 		for i in range(len(self.molecule.atoms)):
 			for p_atom in participant.molecule.atoms:
 				self.eletrostatic_map.append((self.molecule.atoms[i], p_atom))
@@ -460,7 +459,6 @@ class Topology:
 			if r2 and 'CB' in r2.atoms_map:
 				d = Dihedral(r1.atoms_map['C'], r2.atoms_map['N'], r2.atoms_map['CA'], r2.atoms_map['CB'], None)
 				print('{}({:2}) C N CA CB  {:8.3f}'.format(r2.code, r2.sequence, d.get_torsion_angle()))
-
 
 	def print_proper_dihedrals(self, amino_acid=None, backbone=None):
 		counter = 0

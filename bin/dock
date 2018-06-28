@@ -30,53 +30,55 @@ class Docking:
 		self.complex = complex
 		self.ligand = ligand
 		starting_point = np.array([11.102, 24.461, 1.386])
-		starting_point += np.array([7.5]*3)
-		current_point = self.ligand.atoms[30].point
-		delta_to_starting_point = current_point - starting_point
-
+		starting_point += np.array([-15]*3)
+		# starting_point = np.array([0,0,0])
+		current_point = self.ligand.atoms[0].point
+		delta_to_starting_point = starting_point - current_point
 		self.ligand.translate(delta_to_starting_point)
 		self.ligand.reset_starting_point()
+		self.ligand.write('/home/pedro/tmp', 'moved-ligand.pdb')
 
 		self.receptor = receptor
 		self.parameters = Parameters()
 		self.complex.set_force_field_parameters(self.parameters)
 		self.ligand.set_force_field_parameters(self.parameters)
 		self.receptor.set_force_field_parameters(self.parameters)
+		# self.receptor.write('/home/pedro/tmp', 'moved-receptor.pdb')
 
 		self.force_field = ForceField(self.parameters)
-		self.force_field.calculate_energy(self.receptor.get_topology())
-		self.force_field.print_energy()
+		self.force_field.calculate_energy(self.receptor.get_topology(), test_electrostatic_only=True)
+		# self.force_field.print_energy()
 		self.receptor_energy = self.force_field.energy
 
 		self.force_field.calculate_energy(self.ligand.get_topology(), test_electrostatic_only=True)
-		self.force_field.print_energy()
+		# self.force_field.print_energy()
 		self.ligand_energy = self.force_field.energy
 
 		self.complex_topology = self.receptor.get_topology()
 		self.complex_topology.add_participant(self.ligand.get_topology())
-		self.force_field.calculate_energy(self.complex_topology)
+		self.force_field.calculate_energy(self.complex_topology, test_electrostatic_only=True)
 		self.force_field.print_energy()
 		self.complex_energy = self.force_field.energy
 		self.docking_energy = self.complex_energy - self.ligand_energy - self.receptor_energy
 
-		print('Ligand energy: {:10.3f}'.format(self.ligand_energy))
-		print('Receptor energy: {:10.3f}'.format(self.receptor_energy))
-		print('Complex energy: {:10.3f}'.format(self.complex_energy))
-		print('Docking energy: {:10.3f}'.format(self.docking_energy))
+		print('Ligand energy:   {:15.3f}'.format(self.ligand_energy))
+		print('Receptor energy: {:15.3f}'.format(self.receptor_energy))
+		print('Complex energy:  {:15.3f}'.format(self.complex_energy))
+		print('Docking energy:  {:15.3f}'.format(self.docking_energy))
 
-		self.pso = Pso(self.complex_energy_function)
-		self.pso.set_bounds(-180, 180)
+		self.pso = Pso(self.complex_energy_function, dimensions_number=3)
+		self.pso.set_bounds(0, 15)
 		self.pso.dimensions_number = 3
-		self.pso.number_of_particles = 8
-		self.pso.iterations = 3
+		self.pso.number_of_particles = 60
+		self.pso.iterations = 10
 		self.pso.personal_best_retention = 0.003
 		self.pso.global_best_retention = 0.03
 		self.pso.inertia = 1
 
 	def complex_energy_function(self, particle):
-		a = self.atoms[self.atom_index]
-		a.translate(particle.position)
-		return self.force_field.calculate_energy(self.molecule)
+		self.apply_particle(particle)
+		complex_e = self.force_field.calculate_energy(self.complex_topology, test_electrostatic_only=True)
+		return complex_e - self.ligand_energy - self.receptor_energy
 
 	def apply_particle(self, particle):
 		self.ligand.translate_starting_point(particle.dimensions)
@@ -85,13 +87,13 @@ class Docking:
 		optimization = self.pso
 		optimization.run()
 		self.apply_particle(optimization.best_particle)
-		self.force_field.calculate_energy(self.molecule.get_topology())
+		self.force_field.calculate_energy(self.complex_topology)
 		self.force_field.print_energy()
 		import sys
 		if len(sys.argv) > 1:
-			m.write('/home/pedro/tmp', 'best-' + sys.argv[1] + '.pdb')
+			self.ligand.write('/home/pedro/tmp', 'best-ligand-' + sys.argv[1] + '.pdb')
 		else:
-			m.write('/home/pedro/tmp', 'best.pdb')
+			self.ligand.write('/home/pedro/tmp', 'best-ligand.pdb')
 
 
 m_cristal = Molecule(pdb_file_location='/home/pedro/tmp/docking/cristal.pdb')
@@ -100,5 +102,5 @@ m_receptor = Molecule(pdb_file_location='/home/pedro/tmp/docking/receptor.pdb')
 
 docking = Docking(complex=m_cristal, ligand=m_ligante, receptor=m_receptor)
 start_time = time.time()
-# docking.run()
+docking.run()
 print("\t\t\t\t\t\t\t\t\t\t\tDocking function executed in: %s seconds" % (time.time() - start_time))

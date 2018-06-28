@@ -151,8 +151,8 @@ class Pso:
 					self.best_particle = self.p_best_particle[i].copy()
 			m = fitness_sum / self.number_of_particles
 			print('{:15.3f}\t{:25.3f}\t'.format(self.g_best_fitness, m), end='')
-			print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[:int(self.dimensions_number/2)]])
-			# print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[int(self.dimensions_number/2):]])
+			print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[:int(self.dimensions_number)]])
+			# print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[int(self.dimensions_number):]])
 
 			# Determine how to mutate
 			for i in range(self.number_of_particles):
