@@ -150,9 +150,6 @@ class Pso:
 					self.g_best_fitness = fitness
 					self.best_particle = self.p_best_particle[i].copy()
 			m = fitness_sum / self.number_of_particles
-			print('{:15.3f}\t{:25.3f}\t'.format(self.g_best_fitness, m), end='')
-			print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[:int(self.dimensions_number)]])
-			# print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[int(self.dimensions_number):]])
 
 			# Determine how to mutate
 			for i in range(self.number_of_particles):
@@ -163,7 +160,12 @@ class Pso:
 				# if i == 0: print(["{0:7.2f}".format(i) for i in l_best_pos_delta])
 				g_best_pos_delta = p.delta(self.best_particle)
 				self.calculate_new_velocity(v, l_best_pos_delta, g_best_pos_delta)
-			# print(["{0:7.2f}".format(i) for i in self.velocities[0].dimensions])
+			print('{:15.3f}\t{:25.3f}\t'.format(self.g_best_fitness, m), end='')
+			print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[:int(self.dimensions_number)]], end='')
+			print(["{0:7.2f}".format(i) for i in self.velocities[0].dimensions], end='')
+			print(["{0:7.2f}".format(i) for i in self.best_particle.dimensions[:int(self.dimensions_number)]], end='')
+			print('')
+			# print(["{0:7.2f}".format(i) for i in self.particles[0].dimensions[int(self.dimensions_number):]])
 
 			# Mutate particles
 			for i in range(self.number_of_particles):

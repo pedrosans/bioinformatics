@@ -344,10 +344,16 @@ class Topology:
 				if m.atoms[i].res_seq != m.atoms[j].res_seq:
 					self.solid_side_chain_eletrostatic_map.append((m.atoms[i], m.atoms[j]))
 
-	def add_participant(self, participant):
-		self.eletrostatic_map += participant.eletrostatic_map
+	def add_participant(self, participant_topology):
+		self.eletrostatic_map += participant_topology.eletrostatic_map
+		self.mount_interface_to(participant_topology)
+
+	def clear_electrostatic_map(self):
+		self.eletrostatic_map.clear()
+
+	def mount_interface_to(self, another_topology):
 		for i in range(len(self.molecule.atoms)):
-			for p_atom in participant.molecule.atoms:
+			for p_atom in another_topology.molecule.atoms:
 				self.eletrostatic_map.append((self.molecule.atoms[i], p_atom))
 
 	def mount_amino_acid_bonds(self, amino_acid):
@@ -434,7 +440,7 @@ class Topology:
 			line = amino_acid.code + ' \t '
 			for i in range(len(angles)):
 				angle = angles[i]
-				if angle:
+				if angle is not None:
 					line += '{:8.3f}'.format(angle)
 				else:
 					line += '        '
